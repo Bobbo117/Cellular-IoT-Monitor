@@ -17,34 +17,7 @@ const char* VERSION = "AmbientHUB 2022 v6.20";
 *            -->ON at setup WiFi with a sensor
 *            --OFF at kill WiFi with a ssensor
 *    
-*********************************************************************************************************
-*Upgrades from v2.14:
-*Add and test LILLYGO board option - passes
-*Test and-Global board - passes
-*shorten messages ** to serial monitor
-*
-*fixed testMode in ESPNOW mode
-*Implemented ESP NOW option vs Wifi
-*Working on fona.getBattVoltage and software powerDown
-*remove STRING references outside of #ifdef WIFI
-*Can display/ send a single sensor (modified formatData & displayStatus)
-*formatData - removed labels F, %, dbm, and spaces because the are displayed as 20 in dweet; separate sensors with colon
-*
-*Upgrades from 5.15:
-*5/22: commented out espNOW incoming data
-*6/9: Maine config
-*6/14 implement sendATCmd to prevent requesting verbose responses over cellular
-*     connectToCellularNetwork via sendATCmd works
-*6/15 postHeartBeat works via sendATCmd both dweet and ifttt
-*6/16 formatData() add data tag before data
-*6/16  "  redo to group temps together, hums together, etc
-*6/17 sendATCmd convert from string to char
-*6/18 connectToC..., Post... , sendAT has one small  string left
-*6/20 misc cleanup old cmts etc
-*6/21 all STRINGS were converted to char[] arrays or F macro handling!  sendATCmd() verifies OK, HTTPACTION ,200, etc.
-*6/23 add secrets file
-*/
-
+**************************************************************************/
 
 //****************Setup IFTTT webhook API Key*********************************
 /*OPTIONS: 1. Disable the #include <secrets.h> statement below, enable the #define statement below that, and replace the YOUR_IFTTT_KEY_GOES_HERE phrase.
@@ -189,7 +162,9 @@ extern "C" {
   Written by Limor Fried/Ladyada for Adafruit Industries.
   BSD license, all text above must be included in any redistribution
  ****************************************************/
-
+/* The FONA library (link provided below) was enhanced to handle SIM7000 functions by Tim Woo of Botletics.
+ * He releases his software under the GNU General Public License v3.0.
+*/
 #include "Adafruit_FONA.h"          //from https://github.com/botletics/SIM7000-LTE-Shield/tree/master/Code
 //#include <Adafruit_FONA.h>
 Adafruit_FONA_LTE fona = Adafruit_FONA_LTE();
@@ -217,7 +192,7 @@ SSD1306AsciiWire oled;
 /*****************WIFI, ESP_NOW************************/
 #ifdef ESPNOW
   /*********
-  * The code within this '#ifdef ESPNOW' block was adapted from the following:
+  * The code within the '#ifdef ESPNOW' blocks was adapted from the following:
     Rui Santos
     Complete project details at https://RandomNerdTutorials.com/esp-now-many-to-one-esp32/
     
