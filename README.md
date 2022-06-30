@@ -14,7 +14,7 @@ The AmbientHUB software can poll the AmbientAP sensors, if there are any, using 
         2. ESP-Now, a lighter footprint protocol by which the sensors push the data to the hub based on its MAC address.
 
 
-The AmbientHUB software formats the sensor values for hourly transmission via the Hologram IoT cellular platform to the following website options
+The AmbientHUB software formats the sensor values for hourly transmission via the Hologram IoT cellular platform to the following website options:
 
         1. to IFTTT.com for transmission to up to 20 email accounts plus Google sheets;
         2. to Dweet.io which simply saves the messages in scratchpad form;
