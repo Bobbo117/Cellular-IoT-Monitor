@@ -9,11 +9,13 @@ The AmbientHUB software controls an ESP32 microcontroller connected to a tempera
         3. and-global SIM7000A module.  
 
 The AmbientHUB software can poll the AmbientAP sensors, if there are any, using the following protocols:
+
         1. http, where each sensor is configured as a server which can be polled by the hub using a GET command;
         2. ESP-Now, a lighter footprint protocol by which the sensors push the data to the hub based on its MAC address.
 
 
 The AmbientHUB software formats the sensor values for hourly transmission via the Hologram IoT cellular platform to the following website options
+
         1. to IFTTT.com for transmission to up to 20 email accounts plus Google sheets;
         2. to Dweet.io which simply saves the messages in scratchpad form;
         3. to ThingsBoard (future plans)
@@ -23,6 +25,7 @@ The AmbientHUB software formats the sensor values for hourly transmission via th
 Additionally the AmbientHUB software can be configured to provide ifttt and immediate alert should a sensor exceed a predetermented threshhold.
 
 The AmbientAP sensor platform software accomodates the following:
+
         1. an ESP32 or a D1 Mini 8266 microcontroller; 
         2. a BME-280 temperature/humidity/pressure sensor or a DHTxx temperature/humidity sensor;
         3. an (optional) SSD1306 OLED display over the I2C bus;
