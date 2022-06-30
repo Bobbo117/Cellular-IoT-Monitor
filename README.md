@@ -1,8 +1,31 @@
-# Cellular IoT Monitor
-The purpose of this project is to transmit sensor readings from a remote location without requiring internet service.  This is accomplished by using an inexpensive (less than $2/month for 1MByte of data) IoT SIM card along with commonly available components to gain access to the cloud via a cellular connection.  The project uses sensor modules to pass data to a hub for transmission to the cloud.  The HUB can operate with or without separate sensor platforms, as it also has sensors.  The sensor software, AmbientAP, and the hub software, AmbientHUB, are  written in C++ on an Arduino IDE.
+                                                               # Cellular IoT Monitor
 
-The AmbientAP.ino software controls an ESP32 or a D1 Mini 8266 microcontroller connected to a BME-280 temperature/humidity/pressure sensor and an (optional) SSD1306 OLED display over the I2C bus, or optionally a DHTxx temperature/humidity sensor. It can function as a wireless http access point server which provides sensor readings in response to http GET requests, or it can push sensor data via ESP-NOW. It can be used as a stand alone sensor, or it can be used with a parent application, AmbientHUB, which collects readings from up to three such sensors for processing. While the AmbientAP software can be loaded into up to three sensors, there are some compile-time parameters to configure each sensor with a separate unique ID (1,2,or 3) as well as a custom SSID (default is AMBIENT_1, AMBIENT_2, or AMBIENT_3) and a unique title for the optional sensor display (~ AMBIENT 1 ~, ~ AMBIENT 2 ~, OR ~ AMBIENT 3 ~).
+The purpose of this project is to transmit sensor readings from a remote location without requiring internet service.  This is accomplished by using an inexpensive ioT SIM card along with commonly available components to gain access to the cloud via a cellular connection. In its simplest form, the HUB can operate as a stand-alone unit with its own sensors. Alternatively, the HUB can collect data wirelessly from up to three separate sensor platforms.  The hub software, AmbientHUB, and the sensor software, AmbientAP, and are written in C++ on an Arduino IDE.
 
-The AmbientHUB.ino software also controls an ESP32 microcontroller connected to a BME-280 temperature/humidity/pressure sensor and an SSD1306 OLED display over the I2C bus. Additionally, it can be wired to a Botletics SIM7000A cellular IoT modem; a LiLLYGO SIM7000G board with integrated Esp32 Wrover; an and-global SIM7000A module.  It can poll the AmbientAP sensors, if there are any, via http to collect the sensor values; alternatively, it can accept sensor inputs via ESPNow protocol. It formats the sensor values for transmission to IFTTT.com or dweet.io via the Hologram IoT platform. This is configured to pass the data each hour, maintaining a data rate of approximately 1MByte per month.   
+The AmbientHUB software controls an ESP32 microcontroller connected to a temperature/humidity sensor and an optional OLED display over the I2C bus. It has been tested with the following cellular modems:
+        1. Botletics SIM7000A cellular IoT modem;
+        2. LiLLYGO SIM7000G board with integrated Esp32 Wrover;
+        3. and-global SIM7000A module.  
 
-This approach enables users to customize IFTTT to their specific needs. One option is to forward the data to the subject line one or more email accounts, where the bi-hourly feed can be monitored at a glance on a cellphone widget without the need to open the email app.  
+The AmbientHUB software can poll the AmbientAP sensors, if there are any, using the following protocols:
+        1. http, where each sensor is configured as a server which can be polled by the hub using a GET command;
+        2. ESP-Now, a lighter footprint protocol by which the sensors push the data to the hub based on its MAC address.
+
+
+The AmbientHUB software formats the sensor values for hourly transmission via the Hologram IoT cellular platform to the following website options
+        1. to IFTTT.com for transmission to up to 20 email accounts plus Google sheets;
+        2. to Dweet.io which simply saves the messages in scratchpad form;
+        3. to ThingsBoard (future plans)
+        4. to Google Sheets directly without IFTTT (future plans)
+        5. via MQTT to TBD destination (future plans)
+
+Additionally the AmbientHUB software can be configured to provide ifttt and immediate alert should a sensor exceed a predetermented threshhold.
+
+The AmbientAP sensor platform software accomodates the following:
+        1. an ESP32 or a D1 Mini 8266 microcontroller; 
+        2. a BME-280 temperature/humidity/pressure sensor or a DHTxx temperature/humidity sensor;
+        3. an (optional) SSD1306 OLED display over the I2C bus;
+        4. a 0-99% illumination sensor (future plans);
+        5. a flood sensor (future plans);
+        6. a door/window open/closed sensor (future plans);
+              
