@@ -3,6 +3,7 @@
 The purpose of this project is to transmit sensor readings from a remote location without requiring internet service.  This is accomplished by using an inexpensive ioT SIM card along with commonly available components to gain access to the cloud via a cellular connection. In its simplest form, the HUB can operate as a stand-alone unit with its own sensors. Alternatively, the HUB can collect data wirelessly from up to three separate sensor platforms.  The hub software, AmbientHUB, and the sensor software, AmbientAP, and are written in C++ on an Arduino IDE.
 
 The AmbientHUB software controls an ESP32 microcontroller connected to a temperature/humidity sensor and an optional OLED display over the I2C bus. It has been tested with the following cellular modems:
+
         1. Botletics SIM7000A cellular IoT modem;
         2. LiLLYGO SIM7000G board with integrated Esp32 Wrover;
         3. and-global SIM7000A module.  
