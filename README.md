@@ -6,18 +6,14 @@
 
 ## How It Works
 
-This is accomplished by using an inexpensive IoT SIM <br>
-card along with commonly available components to <br>
+This is accomplished by using an inexpensive IoT SIM card along with commonly available components to
 gain access to the cloud via a cellular connection.
 
-In its simplest form, the HUB can operate <br>
-as a stand-alone unit with its own sensors.
+In its simplest form, the HUB can operate as a stand-alone unit with its own sensors.
 
-Alternatively, the HUB can collect data wirelessly <br>
-from up to three separate sensor platforms.
+Alternatively, the HUB can collect data wirelessly from up to three separate sensor platforms.
 
-The hub software - **AmbientHUB** - and the sensor <br>
-software - **AmbientAP** - are written in C++ with the <br>
+The hub software - **AmbientHUB** - and the sensor software - **AmbientAP** - are written in C++ with the <br>
 help of the **Arduino IDE**.
 
 The **AmbientHUB** software controls an **ESP32** <br>
