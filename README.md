@@ -1,4 +1,4 @@
-# Cellular IoT Monitor
+# Cellular IoT Monitor   [![Badge License]][License]
 
 *Transmit sensor data in remote locations without internet.*
 
@@ -101,4 +101,11 @@ The **AmbientAP** sensor platform software accommodates the following:
 -   A `0 - 99%` illumination sensor
 
 -   A flood sensor
+
+
+<!----------------------------------------------------------------------------->
+
+[Badge License]: https://img.shields.io/badge/License-Unknown-808080.svg?style=for-the-badge
+
+[License]: #
 
