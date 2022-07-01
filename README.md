@@ -7,7 +7,7 @@
 ## How It Works
 
 This is accomplished by using an inexpensive IoT SIM <br>
-card along with commonly available components to
+card along with commonly available components to <br>
 gain access to the cloud via a cellular connection.
 
 In its simplest form, the HUB can operate as a <br>
