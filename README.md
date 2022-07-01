@@ -62,13 +62,17 @@ The **AmbientHUB** software formats the sensor values <br>
 for hourly transmission via the **Hologram** IoT cellular <br>
 platform to the listed website options.
 
+### Supported Services
+
 -   `IFTTT.com` for transmission to up to <br>
     20 email accounts plus Google sheets
 
 -   `Dweet.io` which simply saves the <br>
     messages in scratchpad format
 
-##### Planned
+<br>
+
+### Planned
 
 - **Google Sheets** directly without **IFTTT**
 
@@ -85,7 +89,9 @@ The **AmbientHUB** software can be configured <br>
 to provide **IFTTT** and immediate alert should <br>
 a sensor exceed a predetermined threshold.
 
-The **AmbientAP** sensor platform software accommodates the following:
+<br>
+
+### Builtin Modules
 
 -   An ESP32 or a D1 Mini 8266 micro-controller
 
@@ -94,13 +100,17 @@ The **AmbientAP** sensor platform software accommodates the following:
 
 -   An optional `SSD1306` OLED display over the **I2C** bus
 
-#### Planned
+<br>
+
+### Planned
 
 -   A door / window open / closed sensor
 
 -   A `0 - 99%` illumination sensor
 
 -   A flood sensor
+
+<br>
 
 
 <!----------------------------------------------------------------------------->
