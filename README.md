@@ -104,11 +104,11 @@ a sensor exceed a predetermined threshold.
 
 ### Planned
 
--   A door / window open / closed sensor
+-   door / window open / closed sensors
 
--   A `0 - 99%` illumination sensor
+-   `0 - 99%` illumination sensors
 
--   A flood sensor
+-   flood sensors
 
 <br>
 
