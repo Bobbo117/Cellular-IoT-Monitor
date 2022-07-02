@@ -72,7 +72,8 @@ The **AmbientHUB** software formats the sensor values for hourly transmission vi
 
 ## Threshold Alert
 
-The **AmbientHUB** software can be configured to provide **IFTTT** and immediate alert should a sensor exceed a predetermined threshold.
+The **AmbientHUB** software can be configured to provide<br>
+**IFTTT** and immediate alert should a sensor exceed a predetermined threshold.
 
 <br>
 
