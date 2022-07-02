@@ -6,7 +6,7 @@
 
 ## How It Works
 
-This is accomplished by using an inexpensive IoT SIM card along with commonly available components to gain access to the cloud via a cellular connection.
+An inexpensive IoT SIM card along with commonly available components gain access to the cloud via a cellular connection.
 
 In its simplest form, the HUB can operate as a stand-alone unit with its own sensors.
 
@@ -47,7 +47,7 @@ The **AmbientHUB** software can poll the **AmbientAP** sensors, if there are any
 
 ## Formatting Options
 
-The **AmbientHUB** software formats the sensor values for hourly transmission via the **Hologram** IoT cellular platform to the listed website options.
+The **AmbientHUB** software formats the sensor values for hourly transmission via the **Hologram** IoT cellular platform to the listed website services.
 
 ### Supported Services
 
