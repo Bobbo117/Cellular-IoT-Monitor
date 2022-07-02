@@ -6,24 +6,15 @@
 
 ## How It Works
 
-This is accomplished by using an inexpensive IoT SIM <br>
-card along with commonly available components to <br>
-gain access to the cloud via a cellular connection.
+This is accomplished by using an inexpensive IoT SIM card along with commonly available components to gain access to the cloud via a cellular connection.
 
-In its simplest form, the HUB can operate as a <br>
-stand-alone unit with its own sensors.
+In its simplest form, the HUB can operate as a stand-alone unit with its own sensors.
 
-Alternatively, the HUB can collect data wirelessly <br> 
-from up to three separate sensor platforms.
+Alternatively, the HUB can collect data wirelessly from up to three separate sensor platforms.
 
-The hub software - **AmbientHUB** - and <br>
-the sensor software - **AmbientAP** - are written in <br>
-C++ with the help of the **Arduino IDE**.
+The hub software - **AmbientHUB** - and the sensor software - **AmbientAP** - are written in C++ with the help of the **Arduino IDE**.
 
-The **AmbientHUB** software controls an **ESP32** <br>
-micro-controller connected to a temperature / <br>
-humidity sensor and an optional **OLED** display <br>
-over the **I2C** bus.
+The **AmbientHUB** software controls an **ESP32** micro-controller connected to a temperature / humidity sensor and an optional **OLED** display over the **I2C** bus.
 
 <br>
 <br>
@@ -32,8 +23,7 @@ over the **I2C** bus.
 
 -   **Botletics** `SIM7000A` cellular IoT modem
 
--   **LiLLYGO** `SIM7000G` board with <br>
-    integrated **ESP32** Wrover
+-   **LiLLYGO** `SIM7000G` board with integrated **ESP32** Wrover
 
 -   **Global** `SIM7000A` module
 
@@ -42,8 +32,7 @@ over the **I2C** bus.
 
 ## Supported Protocols
 
-The **AmbientHUB** software can poll the **AmbientAP** <br>
-sensors, if there are any, using the listed protocols.
+The **AmbientHUB** software can poll the **AmbientAP** sensors, if there are any, using the listed protocols.
 
 -  `http` where each sensor is configured <br>
     as a server which can be polled by the <br>
@@ -58,9 +47,7 @@ sensors, if there are any, using the listed protocols.
 
 ## Formatting Options
 
-The **AmbientHUB** software formats the sensor values <br>
-for hourly transmission via the **Hologram** IoT cellular <br>
-platform to the listed website options.
+The **AmbientHUB** software formats the sensor values for hourly transmission via the **Hologram** IoT cellular platform to the listed website options.
 
 ### Supported Services
 
@@ -85,9 +72,7 @@ platform to the listed website options.
 
 ## Threshold Alert
 
-The **AmbientHUB** software can be configured <br>
-to provide **IFTTT** and immediate alert should <br>
-a sensor exceed a predetermined threshold.
+The **AmbientHUB** software can be configured to provide **IFTTT** and immediate alert should a sensor exceed a predetermined threshold.
 
 <br>
 
