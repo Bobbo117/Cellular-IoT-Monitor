@@ -8,13 +8,13 @@
 
 An inexpensive IoT SIM card along with commonly available components gain access to the cloud via a cellular connection.
 
-In its simplest form, the HUB can operate as a stand-alone unit with its own sensors.
+The HUB can operate as a stand-alone unit with its own sensors.
 
-Alternatively, the HUB can collect data wirelessly from up to three separate sensor platforms.
+Alternatively, the HUB can collect data wirelessly from up to three separate local sensor platforms.
 
 The hub software - **AmbientHUB** - and the sensor software - **AmbientAP** - are written in C++ with the help of the **Arduino IDE**.
 
-The **AmbientHUB** software controls an **ESP32** micro-controller connected to a temperature / humidity sensor and an optional **OLED** display over the **I2C** bus.
+The **AmbientHUB** software controls an **ESP32** micro-controller connected to a temperature / humidity sensor and an optional **OLED** display.
 
 <br>
 <br>
@@ -32,7 +32,7 @@ The **AmbientHUB** software controls an **ESP32** micro-controller connected to 
 
 ## Supported Protocols
 
-The **AmbientHUB** software can poll the **AmbientAP** sensors, if there are any, using the listed protocols.
+The **AmbientHUB** software can receive the **AmbientAP** sensors using the listed protocols.
 
 -  `http` where each sensor is configured <br>
     as a server which can be polled by the <br>
@@ -47,7 +47,7 @@ The **AmbientHUB** software can poll the **AmbientAP** sensors, if there are any
 
 ## Formatting Options
 
-The **AmbientHUB** software formats the sensor values for hourly transmission via the **Hologram** IoT cellular platform to the listed website services.
+The **AmbientHUB** software collects the sensor values for hourly transmission via the **Hologram** IoT cellular platform to the listed website services.
 
 ### Supported Services
 
@@ -72,7 +72,7 @@ The **AmbientHUB** software formats the sensor values for hourly transmission vi
 
 ## Threshold Alert
 
-The **AmbientHUB** software can be configured to provide<br>
+The **AmbientHUB** software can be configured to provide <br>
 **IFTTT** and immediate alert should a sensor exceed a predetermined threshold.
 
 <br>
@@ -81,8 +81,7 @@ The **AmbientHUB** software can be configured to provide<br>
 
 -   An ESP32 or a D1 Mini 8266 micro-controller
 
--   Either a `BME-280` temperature / humidity / pressure <br>
-    sensor or a `DHTxx` temperature / humidity sensor
+-   Either a `BME-280` or a `DHTxx` temperature / humidity sensor
 
 -   An optional `SSD1306` OLED display over the **I2C** bus
 
@@ -92,7 +91,7 @@ The **AmbientHUB** software can be configured to provide<br>
 
 -   door / window open / closed sensors
 
--   `0 - 99%` illumination sensors
+-   illumination sensors
 
 -   flood sensors
 
