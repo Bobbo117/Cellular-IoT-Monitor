@@ -32,7 +32,7 @@ The **AmbientHUB** software controls an **ESP32** micro-controller connected to 
 
 ## Supported Protocols
 
-The **AmbientHUB** software can receive the **AmbientAP** sensors using the listed protocols.
+The **AmbientHUB** software can receive the **AmbientAP** sensor data using the listed protocols.
 
 -  `http` where each sensor is configured <br>
     as a server which can be polled by the <br>
