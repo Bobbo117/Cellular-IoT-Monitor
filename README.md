@@ -73,7 +73,7 @@ The **AmbientHUB** software collects the sensor values for hourly transmission v
 ## Threshold Alert
 
 The **AmbientHUB** software can be configured to provide <br>
-**IFTTT** and immediate alert should a sensor exceed a predetermined threshold.
+**IFTTT** an immediate alert should a sensor exceed a predetermined threshold.
 
 <br>
 
@@ -81,7 +81,7 @@ The **AmbientHUB** software can be configured to provide <br>
 
 -   An ESP32 or a D1 Mini 8266 micro-controller
 
--   Either a `BME-280` or a `DHTxx` temperature / humidity sensor
+-   A `BME-280`, an MCP9808, or a `DHTxx` temperature / humidity sensor
 
 -   An optional `SSD1306` OLED display over the **I2C** bus
 
