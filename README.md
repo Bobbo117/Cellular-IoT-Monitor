@@ -87,7 +87,7 @@ The **AmbientHUB** software can be configured to provide <br>
 
 <br>
 
-### Planned
+### Added July 2022
 
 -   door / window open / closed sensors
 
