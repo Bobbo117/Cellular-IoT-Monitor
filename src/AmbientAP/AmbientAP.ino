@@ -1,5 +1,41 @@
 
-const char* VERSION = "AmbientAP 2022 v6.20";
+const char* VERSION = "AmbientAP 2022 v7.09";
+
+/*////////////////////////////////////////////////////////////////////////////////////
+
+I HOPE THIS SOFTWARE IS USEFUL TO YOU. 
+
+Copyright 2022 Robert Jessup  MIT License
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software 
+and associated documentation files (the "Software"), to deal in the Software without restriction, 
+including without limitation the rights to use, copy, modify, merge, publish, distribute, 
+sublicense, and/or sell copies of the Software, and to permit persons to whom the Software 
+is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies 
+or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, 
+INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR 
+PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE 
+FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, 
+TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE 
+OR THE USE OR OTHER DEALINGS IN THE SOFTWARE
+*/////////////////////////////////////////////////////////////////////////////////////
+
+/*//////////////////////////////////////////////////////////////////////////////////// 
+The code within the '#ifdef ESPNOW_1to1' and '#ifdef ESPNOW_1toN' to #endif 
+compiler directives is adapted from the following:
+    Rui Santos
+    Complete project details at https://RandomNerdTutorials.com/esp-now-one-to-many-esp32-esp8266/
+    
+    Permission is hereby granted, free of charge, to any person obtaining a copy
+    of this software and associated documentation files.
+    
+    The above copyright notice and this permission notice shall be included in all
+    copies or substantial portions of the Software.
+*////////////////////////////////////////////////////////////////////////////////////
 
 /************************************************************************************
 AmbientAP is a flexible, multi-featured sensor platform.  It can:
@@ -8,7 +44,7 @@ AmbientAP is a flexible, multi-featured sensor platform.  It can:
   3. operate on ESP32 or ESP8266 (including d1 mini) controller.
   4. accommodate BME280 (via I2C) or dht sensors (via pin 5).
   5. report to 1 ESPNOW peer or up to 4 peers.
-  6. sleep and wake up via a timer, or it can stay awake.
+  6. sleep and wake up via a timer, an interrupt (such as a window being opened), or it can stay awake.
   7. sleep immediately after sending a successfully received ESPNOW message when configured as a 1to1 peer.
   8. operate with or without an OLED display.
   9. operate as one of three such devices using this software by assigning unique SensorID 1, 2, or 3 to each sensor platform.
@@ -22,176 +58,393 @@ NOTES -  1. IF using MELife for ESP32 ESP-32S Development Board, use Arduino IDE
          3. Be sure to include all libraries shown in #include statements below for the selected processor in step 1 or 2
          
          4. Onboard LED states for debug/verification purposes when printMode is on:
-            -->ON at Setup Start, off at setup end.
+            -->ON at setup Start, off at setup end.
             -->ON at GET temperature
             -->OFF at GET humidity
             -->OFF at  sleep     
-
-3/21 add ESPNOW option vs WIFI option stuff
-6/9  add ME AmbientHUB MAC address
-     add DHT sensors
-     test 1toN - OK
-     test 1to1 - OK
-     send espNOW only until successful, then sleep when in 1to1 mode
-6/12 cleanup, rearrange code for readability, enhance comments
-
 */
 
-/********************************************************************************************
-  * The code within the '#ifdef ESPNOW_1to1' and '#ifdef ESPNOW_1toN' blocks is adapted from the following:
-    Rui Santos
-    Complete project details at https://RandomNerdTutorials.com/esp-now-one-to-many-esp32-esp8266/
-    
-    Permission is hereby granted, free of charge, to any person obtaining a copy
-    of this software and associated documentation files.
-    
-    The above copyright notice and this permission notice shall be included in all
-    copies or substantial portions of the Software.
-********************************************************************************************/
+//////////////////////////////////////////////////////////////  
+//*******         Compile-time Options           ***********//
+//////////////////////////////////////////////////////////////
 
-/****************Compile-time Options*********************************************************/
-#define printMode      //option: comment out if no printout to computer monitor
-#define includeOled    //option: comment out if no oled display
-                                                                                         
-//Select a Processor:
-#define ESP32           //Recommended choice
-//#define ESP8266       //use for wemos D1 Mini.  NOTE - Use if only one AmbientAP sensor exists.
-                        //Multiple D1 Minis seem to interfere with one another and have limited range
+  //*****************
+  // 1. Select one hardware device below and comment out the other: 
+  // Board selection impacts pin assignments, setup of pin modes, 
+  // pwr on & off pulse duration, and onboard LED on/off states
+  //*****************
+  #define ESP32           //Recommended choice is esp32
+  //#define ESP8266       //use for wemos D1 Mini.  NOTE - Use if only one AmbientAP sensor exists.
+                          //Multiple D1 Minis seem to interfere with one another and have limited range
 
-/***************Select only one of the 3 following transmission protocol #defines: *************/                    
-//#define WIFI
+  //*****************
+  // 2. Select one platform temperature sensor:
+  //****************
+  #define DHT_        // DHT11,21,22, etc.
+  //#define BME_          // BME280
 
-#define ESPNOW_1to1   //send data to one peer: enter MAC address of receiver
-      uint8_t broadcastAddress[] = {0xAC, 0x67, 0xB2, 0x2B, 0x6D, 0x00};  //esp32 #7 MAC Address AC:67:B2:2B:6D:00
+  //*****************
+  // 3. Operatiing Modes
+  //*****************
+  #define printMode      //option: comment out if no printout to Serial monitor
+  
+  #define OLED_          //option: comment out if no oled display 128x64
+  //#define oledFormat1  // displays only temp humidity pressure on OLED display
+  #define oledFormat2    // displays all sensors on OLED display
+  #define luxThreshhold  50   // light - dark threshhold % for OLED display
+  #define h2oThreshhold  20   // wet - dry threshhold % for OLED display
+
+  //*****************                                                                                    //*****************
+  // 4. Timing Parameters
+  //    NOTE: Wemos D1 Mini 8266 max sleep time is 71 minutes = 4260 seconds
+  //*****************
+  const int sleepSeconds = 8*60;       //8*60 default sleep time in seconds; 0 if no sleep   
+  const long awakeSeconds = 2*60;      //2*60 default interval in seconds to stay awake as server; ignored if sleepSeconds = 0 
+  const long chillSeconds = 30;        //interval between readings if sleepSeconds = 0 slows serial monitor updates
+
+  //*****************
+  // 5. Select one of the 3 following protocols for communication between HUB and sensor platforms; 
+  // ESPNOW_1to1 is preferred; NOTE: WIFI is a memory hog:
+  //*****************
+  //#define WIFI
+
+  #define ESPNOW_1to1   //send data to one peer: enter MAC address of receiver
+      uint8_t broadcastAddress[] = {0xAC, 0x67, 0xB2, 0x2B, 0x6D, 0x00};  //example for esp32 #7 MAC Address AC:67:B2:2B:6D:00
       
-//#define ESPNOW_1toN     //send to multiple peers: enter MAC addresses of receivers
+  //#define ESPNOW_1toN     //send to multiple peers: enter MAC addresses of receivers
+  #ifdef ESPNOW_1toN
       //comment these out and use your own AmbientHUB or other peer MAC addresses:
       uint8_t broadcastAddress1[] = {0xA8, 0x03, 0x2A, 0x74, 0xBE, 0x8C};  //LILLYGO MAC Address A8:03:2A:74:BE:8C
       uint8_t broadcastAddress2[] = {0x78, 0x21, 0x84, 0x7F, 0x82, 0x14};  //esp32 #11 Mac Address 78:21:84:7F:82:14
       uint8_t broadcastAddress3[] = {0x7C, 0x9E, 0xBD, 0xE3, 0xC5, 0xC8};  //esp32 #9 Mac Address 7C:9E:BD:E3:C5:C8
       //uint8_t broadcastAddress4[] = {0x8C, 0xAA, 0xB5, 0x85, 0x6A, 0x68};  //esp32 #12 Mac Address 8C:AA:B5:85:6A:68
       uint8_t broadcastAddress4[] = {0xAC, 0x67, 0xB2, 0x2B, 0x6D, 0x00};  //esp32 #7 MAC Address AC:67:B2:2B:6D:00
-
-/********************ESPNOW misc***********************************************************/
-int espNowAttempts=0;            //number of ESPNOW transmission attempts so far (do not adjust)
-#define espNowAttemptsAllowed 3  //number of unsuccessful attempts allowed before sleeping if sleepSeconds > 0
-int espNowDelay = 10000;         //delay in msec between espnow attempts
-
-/****************Select a temp humidity (pressure) sensor: *********************************/
-#define DHTTYPE DHT11
-//#define DHTTYPE DHT21  //AM2301
-//#define DHTTYPE DHT22  //AM2302
-//#define BME280         //temp hum pressure
-
-//**************PIN DEFINITIONS*****************
-//note: esp32 set pin 15 low to prevent startup log on Status display - good to know for battery operation
-#define pinBoardLED 2                 //onboard LED
-#ifdef ESP32
-  #ifdef DHTTYPE
-    #define pinDHT 5                  //5, or use 27 not 4 for DHT temp hum sensors
   #endif
-  #define pinSDA 21                   // ESP 12C Bus SDA for BME temp sensor, OLED, etc
-  #define pinSCL 22                   // ESP 12C Bus SCL for BME temp sensor, OLED, etc
-#endif
-#ifdef ESP8266
-  #ifdef DHTTYPE
-    #define pinDHT 14                 //for DHT11,dht22 temp hum sensors
-  #endif
-  #define pinSDA 4                    // ESP 12C Bus SDA for BME temp sensor, OLED, etc
-  #define pinSCL 5                    // ESP 12C Bus SCL for BME temp sensor, OLED, etc
-#endif 
-//****************Sleep Timer: NOTE: Wemos D1 Mini 8266 max sleep time is 71 minutes = 4260 seconds
-const int sleepSeconds = 8*60;       //8*60 default sleep time in seconds; 0 if no sleep   
-const long awakeSeconds = 2*60;      //2*60 default interval in seconds to stay awake as server; ignored if sleepSeconds = 0 
-const long chillSeconds = 30;        //interval between readings if sleepSeconds = 0 slows serial monitor updates
+  
+  //*****************                                                                                    //*****************
+  // 6. ESPNOW Parameters (if ESPNOW is selected)
+  //*****************
+  int espNowAttempts=0;            //number of ESPNOW transmission attempts so far (do not adjust)
+  #define espNowAttemptsAllowed 3  //number of unsuccessful attempts allowed before sleeping if sleepSeconds > 0
+  int espNowDelay = 10000;         //delay in msec between espnow attempts
 
-//***************Each sensor board needs unique display title and ssid; uncomment one triplet and comment // the others:
-uint8_t sensorID = 1;
-#define displayTitle " ~AMBIENT 1~"  
-const char* ssid = "AMBIENT_1";
-
-//uint8_t sensorID = 2;    
-//#define displayTitle " ~AMBIENT 2~"
-//const char* ssid = "AMBIENT_2";
-
-//uint8_t sensorID = 3;
-//#define displayTitle " ~AMBIENT 3~"
-//const char* ssid = "AMBIENT_3";
-
-//************************End of Compile-time Options******************************************
-uint64_t uS_TO_S_FACTOR = 1000000;  // Conversion factor for micro seconds to seconds
-
-//*****************Sensor libraries***********************
-#include <Wire.h>               //12C bus library for BME280 sensor or OLED display
-#include <Adafruit_Sensor.h>    //sensor library
-
-#ifdef DHTTYPE
-  #include "DHT.h"
-  DHT dht(pinDHT,DHTTYPE);
-#endif
-
-#ifdef BME280
-  #include <Adafruit_BME280.h>    // library for BME280 temp hum pressure sensor
-  Adafruit_BME280 bme;            // I2C
-#endif
-
-//*************SENSOR READINGS*******************
-#ifdef ESP32
-  RTC_DATA_ATTR float temperature1=81.1,humidity1=81.1,pressure = 1000.1; //initial values, then latest valid reading (if not nan or --)
-#endif
-#ifdef ESP8266  //note 8266 does not have RTC_DATA_ATR to preserve measurements when sleeping
-  float temperature1=81.1,humidity1=81.1,pressure = 1000.0;               //initial values, then temperature from sensor if valid
-#endif
-String hum="--",temp="--",pres="--"; //adjusted values sent to hub: "--" if nan or current reading if valid
-
-//*************OLED DISPLAY*******************
-#ifdef includeOled
-  #include <Wire.h>
-  #include "SSD1306Ascii.h"
-  #include "SSD1306AsciiWire.h"
-  #define I2C_ADDRESS 0x3C            // 0X3C+SA0 - 0x3C or 0x3D
-  #define OLED_RESET     -1           // Reset pin # (or -1 if sharing Arduino reset pin)
-  SSD1306AsciiWire oled;
-#endif
-
-//***************WIFI SERVER STUFF******************
-#ifdef WIFI
+  //*****************
+  // 7. ESP32 PIN DEFINITIONS
+  //    note: esp32 set pin 15 low prevents startup log on Serial monitor - 
+  //          good to know for battery operation
+  //*****************
   #ifdef ESP32
-    #include <WiFi.h>                  // wifi libr for esp32
+    #define pinBoardLED 2                 //onboard LED
+    #define pinDoor 27                  //door switch
+    #define pinDleak 39                 //analog input                              
+    #define pinAleak 36                 //analog input
+    #define pinPhotoCell 34             //analog input (white wire on bedroom board)
+    #define pinSDA 21                   // ESP 12C Bus SDA for BME temp sensor, OLED, etc
+    #define pinSCL 22                   // ESP 12C Bus SCL for BME temp sensor, OLED, etc
   #endif
-  #ifdef ESP8266
-    #include <ESP8266WiFi.h>           // wifi libr for esp8266 if you must
-    #include <ESPAsyncTCP.h>           //added for esp8266
-  #endif                
-  #include "ESPAsyncWebServer.h"
-  AsyncWebServer server(80);           //Create AsyncWebServer object on port 80
-  const char* password = "123456789";
-#endif
-
-//****************ESP NOW One to One Setup*****************
-#ifdef ESPNOW_1to1 
-  #include <esp_now.h>
-  #ifdef ESP32
-    #include <WiFi.h>                  // wifi libr for esp32
-  #endif
-  #ifdef ESP8266
-    #include <ESP8266WiFi.h>           // wifi libr for esp8266
-    #include <ESPAsyncTCP.h>           //added for esp8266
-  #endif                
  
+  //*****************
+  // 8. ESP8266 D1 Mini PIN DEFINITIONS
+  //***************** 
+  #ifdef ESP8266
+    #define pinBoardLED 2                 //onboard LED
+    #define pinDoor 15                  //door switch D8
+    #define pinDleak 13                 //analog input D7                             
+    #define pinAleak 12                 //analog input D6
+    #define pinPhotoCell A0             //analog input (white wire on bedroom board)
+  #endif
+
+  //*****************
+  // 9. Sensor Libraries
+  //*****************
+  #ifdef DHT_
+    #include <Adafruit_Sensor.h>
+    #define pinDHT 5                    //pins 5, 27 not 4
+    #include "DHT.h"
+    #define DHTTYPE DHT11  //or DHT21, DHT22
+    DHT dht(pinDHT,DHTTYPE);
+  #endif  
+  #ifdef BME_
+    #include <Adafruit_Sensor.h>
+    #include <Wire.h>               //12C bus library
+    #include <Adafruit_BME280.h>    // library for BME280 temp hum pressure sensor
+    Adafruit_BME280 bme;            // I2C
+  #endif
+
+  //*****************
+  //  10. Each sensor board needs unique display title and ssid; 
+  //  uncomment one triplet and comment // the others:
+  //*****************
+  uint8_t sensorID = 1;
+  #define displayTitle " ~AMBIENT 1~"  
+  const char* ssid = "AMBIENT_1";
+  
+  //uint8_t sensorID = 2;    
+  //#define displayTitle " ~AMBIENT 2~"
+  //const char* ssid = "AMBIENT_2";
+  
+  //uint8_t sensorID = 3;
+  //#define displayTitle " ~AMBIENT 3~"
+  //const char* ssid = "AMBIENT_3";
+
+////////////////////////////////////////////////////////////////////////////
+//*********            End of Compile-time Options           ***************
+////////////////////////////////////////////////////////////////////////////
+
+  uint64_t uS_TO_S_FACTOR = 1000000;  // Conversion factor for micro seconds to seconds
+
+  //*****************
+  // Platform sensor structure
   // Structure to send data must match the receiver structure:
-  typedef struct struct_message {
-      uint8_t id; // must be unique for each sender board
-      float t;    //temperature
-      float h;    //humidity
-      float p;    //pressure
-  } struct_message;
-  struct_message sensorData;      // Create a struct_message called sensorData
+  //*****************
+   typedef struct platforms {   // create an definition of platformm sensors
+      uint8_t id;              // id must be unique for each sender; HUB  id=0; boards are 1,2,3..
+      float temperature;    
+      float humidity;    
+      float pressure;   
+      int lux;     
+      int aH2o;      
+      int dH2o;     
+      int door; 
+  } platforms;
   
-  esp_now_peer_info_t peerInfo;   // Create peer interface
+  #ifdef ESP32  //store the reaadings persistently if esp32
+    RTC_DATA_ATTR platforms sensorData;  // ={sensorID,91.1,92.2,1093.3,94,95,1,1}; to initialize      
+  #endif
+  #ifdef ESP8266
+    platforms sensorData;  //={sensorID,91.1,92.2,1093.3,94,95,1,1};   to initialize  
+  #endif  
+
+  String hum="--",temp="--",pres="--"; //adjusted values sent to hub if wifi used: "--" if nan or current reading if valid
+  //String payload ="11,22,3333,4,55,66,77,----"; future plan
+
+  //*****************
+  // OLED DISPLAY Libraries
+  //*****************
+  #ifdef OLED_
+    #include <Wire.h>
+    #include "SSD1306Ascii.h"
+    #include "SSD1306AsciiWire.h"
+    #define I2C_ADDRESS 0x3C            // 0X3C+SA0 - 0x3C or 0x3D
+    #define OLED_RESET     -1           // Reset pin # (or -1 if sharing Arduino reset pin)
+    SSD1306AsciiWire oled;
+  #endif
+
+  //*****************
+  // WIFI Server Libraries
+  //*****************
+  #ifdef WIFI
+    #ifdef ESP32
+      #include <WiFi.h>                  // wifi libr for esp32
+    #endif
+    #ifdef ESP8266
+      #include <ESP8266WiFi.h>           // wifi libr for esp8266 if you must
+      #include <ESPAsyncTCP.h>           //added for esp8266
+    #endif                
+    #include "ESPAsyncWebServer.h"
+    AsyncWebServer server(80);           //Create AsyncWebServer object on port 80
+    const char* password = "123456789";
+  #endif
+
+  //*****************
+  // ESP NOW One to One Libraries
+  //*****************
+  #ifdef ESPNOW_1to1 
+    #ifdef ESP32
+      #include <WiFi.h>                  // wifi libr for esp32
+    #endif
+    #ifdef ESP8266
+      #include <ESP8266WiFi.h>           // wifi libr for esp8266
+      #include <ESPAsyncTCP.h>           //added for esp8266
+    #endif  
+    #include <esp_now.h>
+    esp_now_peer_info_t peerInfo;   // Create peer interface              
+  #endif
+
+  //*****************
+  // ESP NOW One to Many libraries
+  //*****************
+  #ifdef ESPNOW_1toN
+    #ifdef ESP32
+      #include <WiFi.h>                  // wifi libr for esp32
+    #endif
+    #ifdef ESP8266
+      #include <ESP8266WiFi.h>           // wifi libr for esp8266
+      #include <ESPAsyncTCP.h>           //added for esp8266
+    #endif                  
+    #include <esp_now.h>  
+    esp_now_peer_info_t peerInfo;
+  #endif
+
+/////////////////////////////////////
+//*****       Setup()         *********
+////////////////////////////////////
+void setup(){
+  //Execute one time setup, read and display sensor values, and setup wifi server OR transmit data using ESPNOW.
+  setupPinModes();
+  #ifdef printMode              //print the following to status monitor if printMode defined:
+    Serial.begin(115200);
+    turnOnBoardLED();           //turn on board LED during setup
+    Serial.println(F(""));delay (5000);  //allow time for user to switch to status monitor after compilation
+    Serial.print(F(VERSION));Serial.print(F(" - ")); Serial.println(F(displayTitle));
+    Serial.println(F("----------------------------")); 
+    printWakeupReason();
+    printSensorData();
+  #endif
+  readDoor();     
+  readAh2o();
+  readDh2o();
+  readPhotoCell();
+  setupSensors();               //initialize sensors (can delay 2-4 seconds for sensor ready)
+  readTemperature();            //valid data updates temperature1 and temp; invalid updates only temp with  "--"
+  readHumidity();               //valid data updates humidity1 and hum; invalid updates only hum with  "--"
+  readPressure();               //valid data updates pressure1 and pres; invalid updates only pres with  "--"              
+  setupOledDisplay();           //prepare the oled display if #define includeOled is enabled
+  displayStatus();              //display latest valid sensor readings on oled display if #define incledeOled is enabled
+  setupWifiServer();            //initialize wifi server if #define WIFI is enabled
   
-  // callback verifies successful receipt after message was sent (see loop below for sendEspNow_1to1 function)
-  void OnDataSent(const uint8_t *mac_addr, esp_now_send_status_t status) {
+  setupESPNOW_1to1();           //format data and send espnow msg to a single peer if #define ESPNOW_1to1 is enabled; 
+                                //successful data transfer will cause the system to sleep if sleepSeconds > 0
+ 
+  setupESPNOW_1toN();           //format data and send espnow msg to multiple peers if #define ESPNOW_1toN is enabled; 
+                                //will cause system to go to sleep if sleepSeconds>0 and data was received successfully
+  printSensorData();
+  
+  turnOffBoardLED();            //turn off the board LED when setup complete
+}
+
+//////////////////////////////////
+//*****      Loop()      *********** 
+/////////////////////////////////
+void loop(){ 
+  //Execute repeatedly if system did not go to sleep during setup
+  if (sleepSeconds == 0){  
+                               //if unit does not sleep, read all sensors if chillSeconds has elapsed since last reading
+    if(chillTimeIsUp(chillSeconds*1000)==1){ //slow down loop for serial monitor readability + sensor R&R   
+      readDoor();
+      readAh2o();
+      readDh2o();
+      readPhotoCell();       
+      readTemperature();      //valid data updates temperature1 and temp; invalid updates only temp with  "--"
+      readHumidity();         //valid data updates humidity1 and hum; invalid updates only hum with  "--"
+      readPressure();         //valid data updates pressure1 and pres; invalid updates only pres with  "--"                 
+      //formatPayload();
+      displayStatus();        //display latest vald sensor readings on oled display if #define incledeOled is enabled
+    }   
+  }else{                  
+                              //else if nap time, go to sleep
+    if (sensorNapTime(awakeSeconds*1000) ==1 ){       //determine if awakeSeconds have elapsed
+      if(sensorData.door==0){
+        esp_sleep_enable_ext0_wakeup(GPIO_NUM_27,1); //1 = High OPEN, 0 = Low CLOSED
+      }else{
+        esp_sleep_enable_ext0_wakeup(GPIO_NUM_27,0); //1 = High OPEN, 0 = Low CLOSED  
+      }    
+      #ifdef printMode        //issue sleep message if #define printMode is enabled
+        Serial.println(F(" "));Serial.print(F("sleeping "));Serial.print(sleepSeconds);Serial.println(F(" seconds..zzzz"));
+      #endif  
+      ESP.deepSleep(sleepSeconds * uS_TO_S_FACTOR);   //go to sleep for sleepSeconds 
+    }
+  }
+  sendEspNow_1to1();          //format data and send espnow msg to a single peer if #define ESPNOW_1to1 is enabled; 
+                              //successful data transfer will cause the system to sleep if sleepSeconds > 0                                
+
+  sendEspNow_1toN();          //format data and send espnow msg to multiple peers if #define ESPNOW_1toN is enabled; 
+}                             //repeat at top of the loop
+
+//*********************************
+static int chillTimeIsUp(long msec){    
+  //Read data at timed intervals  
+  static unsigned long previousMillis = 0;   
+  unsigned long currentMillis = millis();
+  if (currentMillis - previousMillis >= msec) {
+    previousMillis = currentMillis; 
+    return(1);
+  }else{
+    return(0);
+  }
+}
+
+//*********************************
+void displayStatus(){  
+  //display sensor readings on oled display if #define OLED_ is enabled
+  #ifdef printMode
+    Serial.println(F("*displayStatus*"));
+  #endif  
+  #ifdef OLED_
+    char buf0[6],buf1[6];
+    oled.clear(); 
+    oled.setFont(fixed_bold10x15);
+    oled.println(displayTitle);       //top line is display title
+    #ifdef oledFormat1
+      oled.print("  ");oled.print(sensorData.temperature);oled.println(" F");
+      oled.print("  ");oled.print(sensorData.humidity);oled.println(" %");
+      oled.print("  ");oled.print(sensorData.pressure);oled.println("mb"); 
+    #endif
+    #ifdef oledFormat2 
+      int iTemperature=sensorData.temperature + .5;
+      if(temp=="--"){
+        oled.print ("?");
+      }
+      oled.print(iTemperature);
+      #ifdef printMode
+        Serial.print("temp, Temperature: ");Serial.print(temp);Serial.print(", ");Serial.print(iTemperature);Serial.println(" *F");
+      #endif  
+      oled.print(" F   ");
+      
+      int iHumidity=sensorData.humidity +.5;
+      if(hum=="--"){
+        oled.print ("?");
+      }
+      oled.print(iHumidity);oled.println("%");
+      #ifdef printMode
+        Serial.print("hum, Humidity: ");Serial.print(hum);Serial.print(F(", "));Serial.print(iHumidity);Serial.println(F("%"));
+      #endif  
+    
+      oled.print ("LIGHT  ");
+      #ifdef printMode
+         Serial.print("lux: ");Serial.println(sensorData.lux);
+      #endif  
+
+      float x=sensorData.lux;
+      if (x>99) {x = 99;}    //limit to 99%
+      dtostrf(x,1,0,buf1);
+      if ( x<10){ 
+        strcpy(buf0,"0");strcat(buf0,buf1);strcpy(buf1,buf0);
+      }
+      oled.print(buf1);
+      oled.println("%");
+    
+
+        if(sensorData.aH2o - h2oThreshhold > 0){  //display leak status in real time
+          oled.print("WET    ");
+          #ifdef printMode
+            Serial.println(" FLOOR WET");
+          #endif  
+        }else{
+          oled.print("DRY    ");
+          #ifdef printMode
+            Serial.println(" FLOOR DRY");
+          #endif  
+        }  
+        if(sensorData.door==0){
+          oled.println("SHUT");
+          #ifdef printMode
+            Serial.println(" DOOR SHUT");
+          #endif  
+        }else{
+          oled.println("OPEN");
+          #ifdef printMode
+            Serial.println(" DOOR OPEN");
+          #endif  
+        }
+    #endif  
+  #endif    //OLED_
+}
+
+//***ESP NOW One to One Callback function***************  
+#ifdef ESPNOW_1to1  
+  void ESPNOW_1to1_OnDataSent(const uint8_t *mac_addr, esp_now_send_status_t status) {
+  //callback verifies successful receipt after message was sent (see loop below for sendEspNow_1to1 function)
     #ifdef printMode
       Serial.println(F("*OnDataSent*"));
       Serial.print(F("\r\nLast Packet Send Status:\t"));
@@ -217,30 +470,11 @@ String hum="--",temp="--",pres="--"; //adjusted values sent to hub: "--" if nan 
   }
 #endif
 
-//****************ESP NOW One to Many Setup***************
+//***ESP NOW One to Many Callback function***************
 #ifdef ESPNOW_1toN
-  #include <esp_now.h>
-  #ifdef ESP32
-    #include <WiFi.h>                  // wifi libr for esp32
-  #endif
-  #ifdef ESP8266
-    #include <ESP8266WiFi.h>           // wifi libr for esp8266
-    #include <ESPAsyncTCP.h>           //added for esp8266
-  #endif                  
-
-  // Structure to send data must match the receiver structure:
-  typedef struct test_struct {
-    uint8_t id;
-    float t;    //temterature
-    float h;    //humidity
-    float p;    //pressure
-  } test_struct;
-  test_struct sensorData;
-  
-  esp_now_peer_info_t peerInfo;
-  
+  void ESPNOW_1toN_OnDataSent(const uint8_t *mac_addr, esp_now_send_status_t status) {
   // callback verifies successful receipt after message was sent (see loop below for sendEspNow_1toN function)
-  void OnDataSent(const uint8_t *mac_addr, esp_now_send_status_t status) {
+  
     #ifdef printMode 
       //print hte MAC address and whether received successfully or not   
       Serial.println(F("*OnDataSent*"));
@@ -256,91 +490,20 @@ String hum="--",temp="--",pres="--"; //adjusted values sent to hub: "--" if nan 
   }
 #endif
 
-//****************Setup**********************
-void setup(){
-  //Execute one time setup, read and display sensor values, and setop wifi server OR transmit data using ESPNOW.
-  delay(500);                   //ESP32 Bug workaround -- don't reference rtc ram too soon.
-  setupPinModes();
-  #ifdef printMode              //print the following to status monitor if printMode defined:
-    Serial.begin(115200);
-    turnOnBoardLED();           //turn on board LED during setup
-    Serial.println(F(""));delay (5000);  //allow time for user to switch to status monitor after compilation
-    Serial.print(F(VERSION));Serial.print(F(" - ")); Serial.println(F(displayTitle));
-    Serial.println(F("----------------------------")); 
-  #endif
-  setupSensors();               //initialize sensors
-  delay (2000);                 //was 2000 for bme280 or dht11; need 4000? for dht 22
-  readTemperature();            //valid data updates temperature1 and temp; invalid updates only temp with  "--"
-  readHumidity();               //valid data updates humidity1 and hum; invalid updates only hum with  "--"
-  readPressure();               //valid data updates pressure1 and pres; invalid updates only pres with  "--"              
-  setupOledDisplay();           //prepare the oled display if #define includeOled is enabled
-  displayStatus();              //display latest valid sensor readings on oled display if #define incledeOled is enabled
-  setupWifiServer();            //initialize wifi server if #define WIFI is enabled
-  
-  setupESPNOW_1to1();           //format data and send espnow msg to a single peer if #define ESPNOW_1to1 is enabled; 
-                                //see OnDataSent procedure in section ESPNOW_1to1 above for callback processing
-                                //successful data transfer will cause the system to sleep if sleepSeconds > 0
- 
-  setupESPNOW_1toN();           //format data and send espnow msg to multiple peers if #define ESPNOW_1toN is enabled; 
-                                //see OnDataSent procedure in section ESPNOW_1toN above for callback processing, which
-                                //will cause system to go to sleep if sleepSeconds>0 and data was received successfully
-  
-  turnOffBoardLED();            //turn off the board LED when setup complete
-}
-//***************Loop****************** 
-void loop(){ 
-  //Execute repeatedly if system did not go to sleep during setup
-  if (sleepSeconds == 0){  
-                                //if unit does not sleep, read all sensors if chillSeconds has elapsed since last reading
-    if(chillTimeIsUp(chillSeconds*1000)==1){ //slow down loop for serial monitor readability + sensor rest   
-        readTemperature();      //valid data updates temperature1 and temp; invalid updates only temp with  "--"
-        readHumidity();         //valid data updates humidity1 and hum; invalid updates only hum with  "--"
-        readPressure();         //valid data updates pressure1 and pres; invalid updates only pres with  "--"                 
-        displayStatus();        //display latest vald sensor readings on oled display if #define incledeOled is enabled
-    }   
-  }else{                  
-                                //else if nap time, go to sleep
-    if (sensorNapTime(awakeSeconds*1000) ==1 ){       //determine if awakeSeconds have elapsed
-      #ifdef printMode          //issue sleep message if #define printMode is enabled
-        Serial.println(F(" "));Serial.print(F("sleeping "));Serial.print(sleepSeconds);Serial.println(F(" seconds..zzzz"));
-      #endif  
-      ESP.deepSleep(sleepSeconds * uS_TO_S_FACTOR);   //go to sleep for sleepSeconds 
-    }
-  }
-  sendEspNow_1to1();            //format data and send espnow msg to a single peer if #define ESPNOW_1to1 is enabled; 
-                                //see OnDataSent procedure in section ESPNOW_1to1 above for callback processing
-                                //successful data transfer will cause the system to sleep if sleepSeconds > 0                                
-
-  sendEspNow_1toN();            //format data and send espnow msg to multiple peers if #define ESPNOW_1toN is enabled; 
-                                //see OnDataSent procedure in section ESPNOW_1toN above for callback processing                            
-}                               //repeat the loop
-
 //*********************************
-static int chillTimeIsUp(long msec){    
-  //Read data at timed intervals  
-  static unsigned long previousMillis = 0;   
-  unsigned long currentMillis = millis();
-  if (currentMillis - previousMillis >= msec) {
-    previousMillis = currentMillis; 
-    return(1);
-  }else{
-    return(0);
-  }
-}
-//*********************************
-void displayStatus(){  
-  //display sensor readings on oled display if #define incledeOled is enabled
+String getAh2o(){
   #ifdef printMode
-    Serial.println(F("*displayStatus*"));
+    Serial.println(F("*getAh2o*"));
   #endif  
-  #ifdef includeOled
-    oled.clear(); 
-    oled.setFont(fixed_bold10x15);
-    oled.println(displayTitle);       //top line is display title
-    oled.print("  ");oled.print(temperature1);oled.println(" F");
-    oled.print("  ");oled.print(humidity1);oled.println(" %");
-    oled.print("  ");oled.print(pressure);oled.println("mb"); 
-  #endif
+  return String(sensorData.aH2o);
+}
+
+//***********************************
+String getDh2o(){
+  #ifdef printMode
+    Serial.println(F("getDh2o*"));
+  #endif  
+  return String(sensorData.dH2o);
 }
 
 //***********************************
@@ -353,6 +516,30 @@ String getTemperature() {
   turnOnBoardLED();  
   return temp;
 }
+
+//***********************************
+String getDoor(){
+  #ifdef printMode
+    Serial.println(F("getDoor*"));
+    Serial.print(" door = ");Serial.println(sensorData.door);
+  #endif  
+  return String(sensorData.door);
+}
+
+//*********************************
+String getPhotoCell(){ 
+  #ifdef printMode
+    Serial.print(F("getPhotoCell*")); 
+    Serial.print(" lux: ");Serial.println(sensorData.lux);
+  #endif                
+// if (door==0){
+//    turnOffBoardLED(); 
+//  }else{
+//    turnOnBoardLED();
+//  }
+  return String(sensorData.lux);
+}
+
 //***********************************
 String getHumidity() {  
   //http GET retrieves last reading
@@ -363,6 +550,7 @@ String getHumidity() {
   turnOffBoardLED();
   return hum;
 }
+
 //***********************************
 String getPressure() {   
   //http GET retrieves last reading
@@ -372,76 +560,158 @@ String getPressure() {
   #endif  
   return pres;
 }
+
+//*******************************
+void printSensorData(){
+  #ifdef printMode  
+    Serial.println(F("*printSensorData*"));
+    Serial.print(sensorData.id);Serial.print(F(" id "));
+    Serial.print(sensorData.temperature);Serial.print(F(" F "));
+    Serial.print(sensorData.humidity);Serial.print(F(" % "));
+    Serial.print(sensorData.pressure);Serial.print(F(" mb "));
+    Serial.print(sensorData.lux);Serial.print(F(" lux "));
+    Serial.print(sensorData.aH2o);Serial.print(F(" aH2o "));
+    Serial.print(sensorData.dH2o);Serial.print(F(" dh2o "));
+    Serial.print(sensorData.door);Serial.println(F(" door "));
+  #endif  
+}
+
+//********************************
+void printWakeupReason(){
+   #ifdef printMode  //print_wakeup_reason()
+    esp_sleep_wakeup_cause_t wakeup_reason;
+    wakeup_reason = esp_sleep_get_wakeup_cause();
+    switch(wakeup_reason){
+      case ESP_SLEEP_WAKEUP_EXT0 : Serial.println(F("Wakeup caused by external signal using RTC_IO")); break;
+      case ESP_SLEEP_WAKEUP_EXT1 : Serial.println(F("Wakeup caused by external signal using RTC_CNTL")); break;
+      case ESP_SLEEP_WAKEUP_TIMER : Serial.println(F("Wakeup caused by timer")); break;
+      case ESP_SLEEP_WAKEUP_TOUCHPAD : Serial.println(F("Wakeup caused by touchpad")); break;
+      case ESP_SLEEP_WAKEUP_ULP : Serial.println(F("Wakeup caused by ULP program")); break;
+      default : Serial.printf("Wakeup was not caused by deep sleep: %d\n",wakeup_reason); break;
+    }
+  #endif 
+}
+
+//***********************************
+void readAh2o(){
+  //Read analog value and convert to % as whole number 0-99
+  #ifdef printMode
+    Serial.println(F("*readAh2o*"));
+  #endif  
+//  turnOnBoardLED(); 
+  sensorData.aH2o = 2.44*(4095-analogRead(pinAleak))/100;   //whole number 1-99 %
+  #ifdef printMode
+    Serial.print("aH2o: ");Serial.print(sensorData.aH2o);Serial.println(F("% "));
+  #endif
+//  turnOffBoardLED();
+}
+
+//***********************************
+void readDh2o(){
+  #ifdef printMode
+    Serial.println(F("*readDh2o*"));
+  #endif  
+  //sensorData.dH2o = 4095-analogRead(pinDleak);
+  sensorData.dH2o = digitalRead(pinDleak);
+  #ifdef printMode
+    Serial.print("dH2o: ");Serial.println(sensorData.dH2o);
+  #endif  
+}
+
+//***********************************
+void readDoor(){
+  #ifdef printMode
+    Serial.println(F("*readDoor*"));
+  #endif
+  sensorData.door = digitalRead(pinDoor);
+  #ifdef printMode
+    Serial.print("door: ");Serial.println(sensorData.door);
+  #endif
+}
+
 //*********************************
-String readHumidity() {  
-  //valid data updates humidity1 and hum; invalid updates only hum with  "--"
+void readHumidity() {  
+  //valid data updates sensorData.humidity and hum; invalid updates only hum with  "--"
   #ifdef printMode
     Serial.println(F("*readHumidity*"));
   #endif  
-  #ifdef DHTTYPE
-    float x = (dht.readHumidity());
+  float x=0;
+  #ifdef DHT_
+    x = (dht.readHumidity());
   #endif
-  #ifdef BME280
-    float x = (bme.readHumidity());
+  #ifdef BME_
+    x = (bme.readHumidity());
   #endif
   hum=String(x);
   if (hum == "nan") {hum = "--";
-   }else{humidity1 = x;
+   }else{sensorData.humidity = x;
   }
   #ifdef printMode
-    Serial.print(F("humidity1, hum: "));Serial.print(humidity1);Serial.print(F(", "));Serial.println(hum);
+    Serial.print(F("humidity, hum: "));Serial.print(sensorData.humidity);Serial.print(F(", "));Serial.println(hum);
   #endif
-  return hum;
 }
+
 //***********************************
-String readPressure(){   
-  //valid data updates pressure1 and pres; invalid updates only pres with  "--"
+void readPhotoCell(){
+  //Read analog value and convert to % as whole number 0-99
+  #ifdef printMode
+    Serial.println(F("*readPhotoCell*"));
+  #endif  
+  sensorData.lux = 2.44*(analogRead(pinPhotoCell)/100);  //whole number 1-99 %
+  #ifdef printMode
+    Serial.print(F("lux: "));Serial.print(sensorData.lux);Serial.println(F("% "));
+  #endif  
+}
+
+//***********************************
+void readPressure(){   
+  //valid data updates sensorData.pressure and pres; invalid updates only pres with  "--"
   #ifdef printMode
     Serial.println(F("*readPressure*"));
-  #endif  
+  #endif 
+  float x = 0; 
   pres="--"; //indicate no reading
-  #ifdef BME280 
-    float x = bme.readPressure()/100.0;    //millibars
+  #ifdef BME_ 
+    x = bme.readPressure()/100.0;    //millibars
     pres = String(x);
     if (pres == "nan") {pres = "--";
-      }else{pressure = x;
+      }else{sensorData.pressure = x;
     }
   #endif                                                                    
   #ifdef printMode
-    Serial.print(F("pressure, pres: "));Serial.print(pressure);Serial.print(F(", "));Serial.println(pres);
+    Serial.print(F("pressure, pres: "));Serial.print(sensorData.pressure);Serial.print(F(", "));Serial.println(pres);
   #endif  
-  return pres;
 }
+
 //***********************************
-String readTemperature() {  
-  //valid data updates temperature1 and temp; invalid updates only temp with  "--"
+void readTemperature() {  
+  //valid data updates sensorData.temperature and temp; invalid updates only temp with  "--"
   #ifdef printMode
     Serial.println(F("*readTemperature*"));
-  #endif  
-  #ifdef DHTTYPE
-    float x=dht.readTemperature(true);  //true = *F
+  #endif 
+  float x = 0; 
+  #ifdef DHT_
+    x=dht.readTemperature(true);  //true = *F
   #endif
-  #ifdef BME280
-    float x=1.8*bme.readTemperature()+32.0;
+  #ifdef BME_
+    x=1.8*bme.readTemperature()+32.0;
   #endif 
   temp=String(x);
   if (temp=="nan"){temp = "--";
-     }else{temperature1=x;
+     }else{sensorData.temperature = x;
   }
   #ifdef printMode 
-     Serial.print(F("temperature1, temp: "));Serial.print(temperature1);Serial.print(F(", "));Serial.println(temp);
+     Serial.print(F("temperature, temp: "));Serial.print(sensorData.temperature);Serial.print(F(", "));Serial.println(temp);
   #endif    
-  return temp;
 }
+
 //***********************************
 void sendEspNow_1to1(){
   //format data and send to single ESPNOW peer if #define espnow_1to1 is enabled
   #ifdef ESPNOW_1to1
     // Set values to send
     sensorData.id = sensorID;
-    sensorData.t = temperature1;
-    sensorData.h = humidity1;
-    sensorData.p = pressure;
+
     esp_err_t espResult = esp_now_send(broadcastAddress, (uint8_t *) &sensorData, sizeof(sensorData)); // Send message via ESP-NOW
     #ifdef printMode
       if (espResult == ESP_OK) { 
@@ -454,15 +724,13 @@ void sendEspNow_1to1(){
     delay(espNowDelay);
   #endif
 }
+
 //***********************************
 void sendEspNow_1toN(){
   //format data and send to multiple ESPNOW peers if #define espnow_1toN is enabled
   #ifdef ESPNOW_1toN
-    sensorData.id = sensorID;
-    sensorData.t = temperature1;
-    sensorData.h = humidity1;
-    sensorData.p = pressure;
-    esp_err_t espResult = esp_now_send(0, (uint8_t *) &sensorData, sizeof(test_struct)); // Send message via ESP-NOW
+
+   esp_err_t espResult = esp_now_send(0, (uint8_t *) &sensorData, sizeof(sensorData)); // Send message via ESP-NOW
     #ifdef printMode 
       if (espResult == ESP_OK) {
         Serial.println(F("Sent with success"));
@@ -474,12 +742,13 @@ void sendEspNow_1toN(){
     delay(espNowDelay);
   #endif                  
 }  
+
 //***********************************
 static int sensorNapTime(long msec){    
   //Read data at timed intervals  
-  #ifdef printMode
-    Serial.println(F("*sensorNapTime*"));
-  #endif  
+  //#ifdef printMode
+  //  Serial.println(F("*sensorNapTime*"));
+  //#endif  
   static unsigned long previousMillis = 0;   
   unsigned long currentMillis = millis();
   if (currentMillis - previousMillis >= msec) {
@@ -489,10 +758,14 @@ static int sensorNapTime(long msec){
     return(0);
   }
 } 
+
 //*********************************
 void setupESPNOW_1to1(){
   //initializes espnow, registers the peer's MAC address, and registers the peer
-  #ifdef ESPNOW_1to1  
+  #ifdef ESPNOW_1to1
+
+    sensorData.id = sensorID;
+    
     WiFi.mode(WIFI_STA);
   
     // Init ESP-NOW
@@ -505,7 +778,7 @@ void setupESPNOW_1to1(){
   
     // Once ESPNow is successfully Init, we will register for Send CB to
     // get the status of Trasnmitted packet
-    esp_now_register_send_cb(OnDataSent);
+    esp_now_register_send_cb(ESPNOW_1to1_OnDataSent);
     
     // Register peer
     memcpy(peerInfo.peer_addr, broadcastAddress, 6);
@@ -521,10 +794,14 @@ void setupESPNOW_1to1(){
     }
   #endif
 }
+
 //*********************************
 void setupESPNOW_1toN(){
   //initializes espnow, registers the peer MAC addresses, and registers four peers
   #ifdef ESPNOW_1toN
+
+    sensorData.id = sensorID;
+  
     WiFi.mode(WIFI_STA);
    
     if (esp_now_init() != ESP_OK) {
@@ -534,7 +811,7 @@ void setupESPNOW_1toN(){
       return;
     }
     
-    esp_now_register_send_cb(OnDataSent);
+    esp_now_register_send_cb(ESPNOW_1toN_OnDataSent);
      
     // register peer
     peerInfo.channel = 0;  
@@ -575,13 +852,14 @@ void setupESPNOW_1toN(){
   
   #endif
 }
+
 //*********************************
 void setupOledDisplay(){
   //setup OLED display on I2C bus
   #ifdef printMode
     Serial.println(F("*setupOledDisplay*"));
   #endif
-  #ifdef includeOled
+  #ifdef OLED_
     Wire.begin();  
     #if OLED_RESET  >= 0
       oled.begin(&Adafruit128x64, I2C_ADDRESS, OLED_RESET);
@@ -590,6 +868,7 @@ void setupOledDisplay(){
     #endif 
   #endif 
 }
+
 //*********************************
 void setupPinModes(){                
   //Set Pin Modes INPUT / OUTPUT
@@ -597,18 +876,25 @@ void setupPinModes(){
     Serial.println(F("*setupPinModes*"));
   #endif   
   pinMode(pinBoardLED,OUTPUT);
+  pinMode (pinDoor, INPUT);
+  //****WeMos:
+  pinMode (pinDleak, INPUT);
+  pinMode (pinAleak, INPUT); 
 }
+
 //*********************************
 void setupSensors(){
   //initializes sensors
   #ifdef printMode
     Serial.println(F("*setupSensors*"));
   #endif  
-  #ifdef DHTTYPE
+  #ifdef DHT_
     dht.begin();
+    delay(2000);
   #endif
-  #ifdef BME280
+  #ifdef BME_
     bool bme280=bme.begin(0x76);
+    delay(1000);
     if (!bme280){
        #ifdef printMode
          Serial.println(F("Failed to initiate bme280"));
@@ -616,6 +902,7 @@ void setupSensors(){
     }
   #endif
 }
+
 //*************************************
 void setupWifiServer(){
   //Initializes WIFI server for access to clients that issue GET commands to retrieve sensor data
@@ -624,7 +911,7 @@ void setupWifiServer(){
       Serial.print(F("sensorID: "));Serial.println(sensorID);
       Serial.print(F("SSID: "));Serial.println(ssid);
     #endif
-    //WiFi.softAP(ssid, password);   
+    //WiFi.softAP(ssid, password);   //use this if you want a passsword
     WiFi.softAP(ssid);   // OMIT password for open AP 
     delay(100);
     IPAddress Ip(192,168,4,sensorID);
@@ -635,7 +922,9 @@ void setupWifiServer(){
     #ifdef printMode
       Serial.print(F("AP IP address: "));Serial.println(IP);
     #endif 
-  
+    //server.on("/payload", HTTP_GET, [](AsyncWebServerRequest *request){
+    //  request->send_P(200, "text/plain", getPayload().c_str());  
+    //});  
     server.on("/temperature", HTTP_GET, [](AsyncWebServerRequest *request){
       request->send_P(200, "text/plain", getTemperature().c_str());
     });
@@ -645,9 +934,25 @@ void setupWifiServer(){
     server.on("/pressure", HTTP_GET, [](AsyncWebServerRequest *request){
       request->send_P(200, "text/plain", getPressure().c_str());
     });
+    server.on("/lux", HTTP_GET, [](AsyncWebServerRequest *request){
+      request->send_P(200, "text/plain", getPhotoCell().c_str());
+    });
+    server.on("/ah2o", HTTP_GET, [](AsyncWebServerRequest *request){
+      request->send_P(200, "text/plain", getAh2o().c_str());
+    });
+    server.on("/dh2o", HTTP_GET, [](AsyncWebServerRequest *request){
+      request->send_P(200, "text/plain", getDh2o().c_str());
+    });
+    server.on("/door", HTTP_GET, [](AsyncWebServerRequest *request){
+      request->send_P(200, "text/plain", getDoor().c_str());
+    });
+    //server.on("/displayStatus1", HTTP_GET, [](AsyncWebServerRequest *request){
+    //  request->send_P(200, "text/plain", displayStatus().c_str());
+    //});
     server.begin();       // Start server
   #endif
 }
+
 //*************************************
 void turnOnBoardLED(){              
   // Turn Board LED on
@@ -661,6 +966,7 @@ void turnOnBoardLED(){
     digitalWrite(pinBoardLED, HIGH);
   #endif  
 } 
+
 //*********************************    
 void turnOffBoardLED(){             
   // Turn board LED off
