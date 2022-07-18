@@ -1,5 +1,6 @@
 
-const char* VERSION = "AmbientHUB 2022 v7.09";
+const char* VERSION = "AmbientHUB 2022 v7.15";
+
 
 /*////////////////////////////////////////////////////////////////////////////////////
 
@@ -55,47 +56,72 @@ compiler directives is adapted from the following:
 /* The FONA library (link provided below) was enhanced to handle SIM7000 functions by Tim Woo of Botletics.
  * He releases his software under the GNU General Public License v3.0.
 */
-/*********************************************************************************************************
-* AmbientHUB collects onboard and external sensor data and passes it via cellular connection to IFTTT.com and Dweet.io.    
-*
-* NOTES - 1. IF using MELife ESP32 ESP-32S Development Board, use Arduino IDE "esp32 Dev Module" or "MH ET LIVE ESP32 Devkit"
-*               (tested with Botletics arduino SIM7000A shield and and-global SIM7000A boards - select BOTLETICS hardware device below)
-* 
-*         2. IF using LillyGo SIM7000G, select ESP32 Wrover Module, remove on board SD card for software upload
-*         
-*         3. Be sure to include all libraries shown in #include statements below. 
-*            <xxx> are searched in library directories, "xxx" are searched in sketch local directory
-*         
-*         4. ESP LED states for debug/verification purposes:
-*            -->Blinks 5 seconds at reboot or first time startup
-*            -->ON at setup WiFi with a sensor
-*            --OFF at kill WiFi with a ssensor
-*/    
+
+//*********************************************************************************************************
+// AmbientHUB collects onboard and external sensor data and passes it via cellular connection to IFTTT.com and Dweet.io.    
+//
+//NOTES - 1. IF using MELife ESP32 ESP-32S Development Board, use Arduino IDE "esp32 Dev Module" or "MH ET LIVE ESP32 Devkit"
+//              (tested with Botletics arduino SIM7000A shield and and-global SIM7000A boards - select BOTLETICS hardware device below)
+//
+//        2. IF using LillyGo SIM7000G, select ESP32 Wrover Module, remove on board SD card for software upload
+//        
+//        3. Be sure to include all libraries shown in #include statements below. 
+//           <xxx> are searched in library directories, "xxx" are searched in sketch local directory
+//        
+//        4. ESP LED states for debug/verification purposes:
+//           -->Blinks 5 seconds at reboot or first time startup
+//           -->ON at setup WiFi with a sensor
+//           --OFF at kill WiFi with a ssensor
+   
 //////////////////////////////////////////////////////////////  
 //*******     Setup IFTTT webhook API Key        ***********//
 //////////////////////////////////////////////////////////////
 
-  //OPTIONS: 1. Disable the #include <secrets.h> statement below, enable the #define statement below that, and replace the YOUR_IFTTT_KEY_GOES_HERE phrase.
-  //   or    2. Create a secrets.h file with the following line and replace the YOUR_IFTTT_KEY_GOES_HERE phrase:    
-  //#define SECRET_IFTTT_HB_URL "http://maker.ifttt.com/trigger/HB/with/key/YOUR_IFTTT_KEY_GOES_HERE"  
-  //
-
-  #include <secrets.h>                  
-  //#define SECRET_IFTTT_HB_URL "http://maker.ifttt.com/trigger/HB/with/key/YOUR_IFTTT_KEY_GOES_HERE"  //heartbeat event HB
-
+  //OPTIONS: 1. Replace the YOUR_IFTTT_KEY_GOES_HERE phrase in the #define SECRET_IFTTT_HB_URL... statement below, OR
+  //         2. include the #define SECRET_IFTTT_HB_URL... statement in a secrets.h file. 
+             
+  #define SECRET_IFTTT_HB_URL "http://maker.ifttt.com/trigger/HB/with/key/YOUR_IFTTT_KEY_GOES_HERE"  //heartbeat event HB
+  //#include <secrets.h>                  
+  
 //////////////////////////////////////////////////////////////  
 //*******         Compile-time Options           ***********//
 //////////////////////////////////////////////////////////////
 
   //*****************
-  // 1. Assign a short prefix to the readings being sent to the cloud 
+  // 1. Operatiing Modes - choose any combination
+  //*****************
+  
+  //#define alarmMode                //  enables alarm ifttt when a measurement crosses threshhold; // no alarm
+  // #define ATMode                  // uncomment to use AT commands as workarounds to higher level FONA commands 
+  #define cellularMode               //  enables a cellular connection; // no connectiod (good for debugging code without racking up cellular costs)
+  #define heartbeatMode              // turns on periodic heartbeat reporting of all readings; // no heartbeat
+  #define iFTTTMode                  //  enables use of ifttt; // no IFTTT
+  #define OLED_                      // 128 x 64 pixel OLED display if hub uses one
+  #define printMode                  // comment out if you dont want brief status display of sensor readings, threshholds and cellular interactions to pc
+  #define simSleepMode               // shut off sim shield between readings 
+ // #define testCellular             // comment out if you dont want to enable test transmission to dweet, ifttt at initial startup
+ // #define testMode                 // uncomment for verbose test messages to status monitor
+
+  //*****************
+  // 2. Timing Parameters
+  //*****************
+  
+  const int espSleepSeconds =  48*60;  // 48*60; //or 0; heartbeat period OR wakes up out of sleepMode after sleepMinutes           
+  const long espAwakeSeconds = 12*60; // 12*60 interval in seconds to stay awake as HUB; you dont need to change this if espSleepSeconds = 0 indicating no sleep
+  int heartbeatMinutes = 10;          // 10 heartbeat delay after HUB awakens.  this needs to be at least 2 minutes less thab espAwakeSeconds 
+
+  const long serialMonitorSeconds = 5*60;      // interval in seconds to refresh serial monitor sensor readings (enhance readability)            
+  const long samplingRateSeconds = 10; //1*60; // interval in seconds between sensor readings in alert mode
+
+  //*****************
+  // 3. Assign a short prefix to the readings being sent to the cloud 
   // to identify the source especially if you have more then one HUB
   //*****************
   
   char dataTag[] = "ME";    // <<< unique prefix to identify source of data packet
 
   //*****************
-  // 2. Select one hardware device below and comment out the others: **/
+  // 4. Select one hardware device below and comment out the others: **/
   // Board selection impacts pin assignments, setup of pin modes, 
   // pwr on & off pulse duration, and onboard LED on/off states*/
   //*****************
@@ -104,7 +130,7 @@ compiler directives is adapted from the following:
   //#define LILLYGO  
 
   //*****************
-  // 3. Select one method of communication between HUB and sensor platforms; 
+  // 5. Select one method of communication between HUB and sensor platforms; 
   // ESPNOW is preferred; WIFI is a memory hog:
   //*****************
   
@@ -112,38 +138,12 @@ compiler directives is adapted from the following:
   //#define WIFI
   
   //*****************
-  // 4. Select one HUB temp sensor if using a HUB temp sensor:
+  // 6. Select one HUB temp sensor if using a HUB temp sensor:
   //****************
   
-  //#define DHT_      // DHT11,21,22, etc.
   #define BME_        // BME280
+  //#define DHT_      // DHT11,21,22, etc.
   //#define MCP9808_  // botletics shield sensor
-
-  //*****************
-  // 5. Operatiing Modes
-  //*****************
-  
-  //#define testCellular                // comment out if you dont want to enable test transmission to dweet, ifttt at reboot
-  #define printMode                   // comment out if you dont want brief status display of sensor readings, threshholds and cellular interactions to pc
-  //#define testMode                    // uncomment for verbose test messages to status monitor
-  //#define ATMode                      // uncomment to use AT commands to reduce cellular return traffic instead of higher level FONA commands 
-  #define cellularMode               //  enables a cellular connection; // no connectiod (good for debugging code without tripping cellular comms)
-  //#define alarmMode                  //  enables alarm ifttt when a measurement crosses threshhold; // no alarm
-  #define iFTTTMode                  //  enables use of ifttt; // no IFTTT
-  #define heartbeatMode             // turns on periodic heartbeat reporting of all readings; // no heartbeat
-  #define simSleepMode               // shut off sim shield between readings 
-  #define OLED_                     //128 x 32 pixel OLED display if hub uses one
-
-  //*****************
-  // 6. Timing Parameters
-  //*****************
-  
-  const int espSleepSeconds = 48*60;  // 48*60; //or 0; heartbeat period OR wakes up out of sleepMode after sleepMinutes           
-  const long espAwakeSeconds = 12*60; // 12*60 interval in seconds to stay awake as HUB; you dont need to change this if espSleepSeconds = 0 indicating no sleep
-  int heartbeatMinutes = 10;          // 10 heartbeat delay after HUB awakens.  this needs to be at least 2 minutes less thab espAwakeSeconds 
-
-  const long serialMonitorSeconds = 5*60;      // interval in seconds to refresh serial monitor sensor readings (enhance readability)            
-  const long samplingRateSeconds = 10; //1*60; // interval in seconds between sensor readings in alert mode
 
   //*****************    
   // 7. Sensor Inventory
@@ -154,25 +154,25 @@ compiler directives is adapted from the following:
                                       
   // arrays to indicate types of sensors aboard each sensor platform (1=presnt, 0 = absent)
   // HUB  id=0; boards are 1,2,3..
-  uint8_t temps[] = {1,1,1,1}, hums[]={1,1,1,1}, dbms[]={1,0,0,0}, pres[]={1,1,1,1}, bat[]={1,0,0,0};
-  uint8_t luxs[] = {0,1,1,1}, h2os[] = {0,1,0,0},doors[]={0,0,1,1};
+  uint8_t temps[] = {1,1,1,1}, hums[]={1,1,1,1}, dbms[]={1,0,0,0}, pres[]={1,0,0,0}, bat[]={1,0,0,0};
+  uint8_t luxs[] = {0,1,0,1}, h2os[] = {0,1,0,0},doors[]={0,0,1,1};
   
   //*****************
   // 8. platform sensor data structure
   //*****************
   
-  typedef struct platforms {   // create an definition of platformm sensors
+   typedef struct platforms {  // create an definition of platformm sensors
       uint8_t id;              // id must be unique for each sender; HUB  id=0; boards are 1,2,3..
-      float temperature;    
-      float humidity;    
-      float pressure;   
-      int lux;     
-      int aH2o;      
-      int dH2o;     
-      int door; 
+      float temperature;       // F
+      float humidity;          // %
+      float pressure;          // mb
+      uint8_t lux;             // 0-99 % of full illumination
+      uint8_t aH2o;            // 0-99 % of full sensor level detection
+      uint8_t dH2o;            // 0 or 1 digital readout 1=flood  
+      uint8_t door;            // 0 or 1 door open or closed 1=open
   } platforms;
   
-  platforms sensorData; // Create a structure called sensorData to receive data from sensor platforms
+  platforms sensorData = {0,0,0,0,0,0,0,0}; // Create a structure called sensorData to receive data from sensor platforms
   RTC_DATA_ATTR platforms platform[numberOfPlatforms]; //store the reaadings persistently in an array of structures
   RTC_DATA_ATTR int dbm[] = {-99,0,0,0};      //signal strenth not included in the platform structure
   RTC_DATA_ATTR uint16_t vbat[] = {2500,0,0,0}; //battery voltage (mv) not included in the platform structure
@@ -182,16 +182,14 @@ compiler directives is adapted from the following:
   const char* sensors[]={"local","wifi","wifi","wifi"};
   
   char buf[200],buf2[20]; //formatData() sets up buf with data to be sent to the cloud. Buf2 is working buffer.
-  
-  #define luxThreshhold  50         // threshhold % which will cause display or IFTTT alert if enabled in hub
-  #define h2oThreshhold  20         // threshhold % which will cause display or IFTTT alert if enabled in hub
-  #define doorThreshhold  2000      // threshhold which will cause IFTTT alert ??
-    
-  //Arrays to indicate which sensors can be used to generate IFTTT alert
+     
   uint8_t alert[numberOfPlatforms];         // used to accumulate # sensors that have alert condition
+  #define h2oThreshhold  20         // threshhold % which will cause display or IFTTT alert if enabled
+  #define luxThreshhold  45         // threshhold % which will cause display or IFTTT alert if enabled
 
   #ifdef alarmMode
-    uint8_t iftTemps[] = {0,0,0,0}, iftHums[]={0,0,0,0};
+    //Arrays to indicate which sensors can be used to generate IFTTT alert
+    uint8_t iftTemps[] = {1,1,1,1}, iftHums[]={0,0,0,0}, iftLuxs[]={0,1,0,0}, iftH2os[]={0,1,0,0}, iftDoors[]={0,0,1,1};
     #define tempHighLimit 90            // upper limit which will cause IFTTT alert
     #define tempLowLimit 45             // lower limit which will cause IFTTT alert
     #define tempIncrement 5             // Increment by which temp threshholds are moved to prevent multiple alarms caused by temp fluctuations around the threshhold
@@ -212,8 +210,8 @@ compiler directives is adapted from the following:
     
     RTC_DATA_ATTR int doorReportedLow[]={1,1,1,1};
     RTC_DATA_ATTR int doorReportedHigh[]={0,0,0,0};
-    int doorReportedHighReset[numberOfSensors];
-    int doorReportedLowReset[numberOfSensors];
+    int doorReportedHighReset[numberOfPlatforms];
+    int doorReportedLowReset[numberOfPlatforms];
 
   #endif  
 
@@ -238,7 +236,18 @@ compiler directives is adapted from the following:
     #include "freertos/FreeRTOS.h"
     #include "freertos/timers.h" 
   }
-  
+
+  //*****************
+  //    ESP32 PIN DEFINITIONS
+  //    note: esp32 set pin 15 low prevents startup log on Serial monitor - 
+  //          good to know for battery operation
+  //    From 363-ESP Pri 1 pins - The guy with the swiss accent:
+  //      Pri1: GPIO 4*,5,16,17,18,19,23,32,33; (16,17 not available on Wrover)
+  //      Pri2 (input only, no internal pullup) GPIO 34,35,36,39.
+  //      Do not use ADC2 (GPIO 2,4*,12-15, 25-27 if using wifi
+  //      Reserve GPIO 21,22 for I2C bus
+  //      Can use 1,2,4,12-15, 25-27, 32-39 as wakeup source; avoid conflict w/ wifi by using only 32-39 
+  //
   //*****************
   // Botletics SIM7000A Arduino Shield Connections to ESP32
   //*****************
@@ -247,7 +256,6 @@ compiler directives is adapted from the following:
     #define UART_BAUD   9600
     #define pinBoardLED 2               // ESP32 on board led
     #define pinFONA_RST 5               // BOTLETICS shield D7
-    #define pinButton 4                 // Spare
     #define pinFONA_TX 16               // ESP32 hardware serial RX2 to shield 10 TX
     #define pinFONA_RX 17               // ESP32 hardware serial TX2 to shield 11 RX
     #define pinFONA_PWRKEY 18           // BOTLETICS shield 6
@@ -276,11 +284,12 @@ compiler directives is adapted from the following:
   // Pin connections used for sensors
   //*****************
   
-  #define pinDleak 34                 // esp32 analog input                              
-  #define pinAleak 39                 // esp32 analog input
-  #define pinPhotoCell 36             // esp32 analog input
+  #define pinDleak 39                 // digital flood indicater                            
+  #define pinAleak 36                 // analog flood measure
+  #define pinPhotoCell 34             // esp32 analog input; photocell pulled high, 
+                                      // 100K reistor pulled low, node to GPIO
   #ifdef DHT_
-    #define pinDHT 13  //5, 27 not 4    // DHT temperature & Humidity sensor
+    #define pinDHT 32                 // DHT temperature & Humidity sensor
   #endif
   
   //*****************
@@ -374,7 +383,7 @@ void setup() {
       printWakeupReason();
       printSensorData();
    #endif
-   wakeUpSensors();                 // Wake up the HUB temp sensors 
+   setupSensors();                 // Wake up the HUB temp sensors 
    #ifdef cellularMode              // If cellular comms is enabled
      if (bootCount ==0){            // if first boot (not wakeup)
        powerUpSimModule();          // Power up the SIM7000 module by goosing the PWR pin 
@@ -413,24 +422,24 @@ void loop() {
     for (uint8_t i=0; i< numberOfPlatforms; i++){  // for each sensor:
       if (sensorStatus[i]==0){    // if sensor has not been sampled yet:    
         #ifdef WIFI   
-          //killWifi();               //prepare to connect via wifi with server
-          //if(setupWifi(i)==0){      // connect to local ESP32(i) wifi server if not local
+          killWifi();               //prepare to connect via wifi with server
+          if(setupWifi(i)==0){      // connect to local ESP32(i) wifi server if not local
         #endif
-          sensorStatus[i]= readSensorData(i); //1;     // wifi success to display ":" on oled header in displayStatus()
-          if(sensorStatus[i]==1){
-            printSensorData();
-            alert[i]= processIfTTT(i);    // compare sensors to threshholds and set alert status
-          }  
-        #ifdef WIFI  
-          //killWifi();
-          //}
-        #endif
+            sensorStatus[i]= readSensorData(i); //1;     // wifi success to display ":" on oled header in displayStatus()
+            if(sensorStatus[i]==1){
+              printSensorData();
+              alert[i]= processAlerts(i);    // compare sensors to threshholds and set alert status
+            }  
+            #ifdef WIFI  
+              killWifi();
+          }
+            #endif
       }  
       displayStatus(i);         // update OLED display if thee is one 
     }
     delay(5000);                // allow latest display time before toggle timer takes over
-    int alerts = 0;             // determine whether we have one or more alerts:    
-    for (int i=0;i<numberOfPlatforms;i++){  //determine if an alarm threshhold was crossed
+    uint8_t alerts = 0;             // determine whether we have one or more alerts:    
+    for (uint8_t i=0;i<numberOfPlatforms;i++){  //determine if an alarm threshhold was crossed
       alerts=alerts+alert[i];
     }
     if (alerts>0){              // if we have alerts, activate cellular network and report via ifttt if alarmMode set
@@ -651,17 +660,17 @@ void displayStatus(uint8_t i){
     if (h2os[i]==0){oled.print("--- ");
       }else{
       if (platform[i].aH2o - h2oThreshhold > 0){
-        oled.print("Wet ");
+        oled.print("WET ");
       }else{
-        oled.print("Dry ");
+        oled.print("DRY ");
       }
     } 
     if (doors[i]==0){oled.print("---- "); 
       }else{
       if(platform[i].door==0){
-        oled.print("Shut ");
+        oled.print("SHUT ");
       }else{
-        oled.print("Open ");
+        oled.print("OPEN ");
       }
     }
     if (luxs[i]==0){oled.println("---"); 
@@ -839,8 +848,8 @@ static int heartbeatTimeIsUp(long msec){    //Read data at timed intervals
 } 
 //****************************************
 String httpGETRequest(const char* serverName) {
-  #ifdef testMode 
-    Serial.print(F("*httpGETRequest*"));Serial.print(serverName);
+  #ifdef printMode 
+    Serial.println(F("*httpGETRequest*"));Serial.println(serverName);
   #endif  
   #ifdef WIFI  
     HTTPClient http;
@@ -854,17 +863,17 @@ String httpGETRequest(const char* serverName) {
     String payload = "--" ;
     
     if (httpResponseCode>0) {
-      #ifdef testMode 
+      #ifdef printMode 
         Serial.print(F(" HTTP Response Code: "));
         Serial.print(httpResponseCode);
       #endif
       payload = http.getString();
       //x.toCharArray(payload,6);
-      
+Serial.println(payload);      
     }
     else {
-      #ifdef testMode 
-        Serial.print(F(" Error code: "));
+      #ifdef printtMode 
+        Serial.print(F(" HTTP Response (error) Code: "));
         Serial.print(httpResponseCode);
       #endif
     }
@@ -894,9 +903,12 @@ void initializeArrays(){
 
 //****************************************
 void killWifi(){
+  #ifdef WIFI
     WiFi.disconnect();
+delay(500);
     turnOffBoardLED();
     //if (testMode==1) {Serial.println("*WiFi killed*");}
+  #endif  
 }   
 
 //*********************************
@@ -937,6 +949,8 @@ void postHeartbeatData(){       //upload sensor data to dweet.io or IFTTT
         int err = sendATCmd("AT+HTTPTERM","","");
         err = sendATCmd("AT+HTTPINIT","","");
         err = sendATCmd("AT+HTTPPARA","=CID","1");
+        //delay(200);
+        Serial.print("URL: ");Serial.println(URL);
         err = sendATCmd("AT+HTTPPARA","=URL",URL);
         delay(2000);
         err = sendATCmd("AT+HTTPACTION","=0","");
@@ -963,6 +977,7 @@ void postHeartbeatData(){       //upload sensor data to dweet.io or IFTTT
           err = sendATCmd("AT+HTTPINIT","","");
           err = sendATCmd("AT+HTTPPARA","=CID","1");
           sprintf(URL, "%s?value1=%s",SECRET_IFTTT_HB_URL,buf);
+          Serial.print("URL: ");Serial.println(URL);
           err = sendATCmd("AT+HTTPPARA","=URL",URL);
           delay(200);
           err = sendATCmd("AT+HTTPACTION","=0","");
@@ -1101,10 +1116,10 @@ void printWakeupReason(){
 }
 
 //*********************************
-int processIfTTT(uint8_t i) {              // set flag to post alert to iFTTT if temp outside limit
+int processAlerts(uint8_t i) {          // set flag to post alert to iFTTT if temp outside limit
                                        // and adjust temp threshholds 
   #ifdef printMode
-    Serial.print(F("*processIfTTT*")); Serial.print (i); Serial.print(F(": "));
+    Serial.print(F("*processAlerts*")); Serial.print (i); Serial.print(F(": "));
     #ifdef alarmMode 
      //Serial.print("temp = " + String(temperature[i]));
      Serial.print(" Thresh: " + String(tempLowThresh[i]));
@@ -1172,13 +1187,13 @@ int processIfTTT(uint8_t i) {              // set flag to post alert to iFTTT if
 lux:
     if (iftLuxs[i]==1){
     //if (testMode==1) {Serial.println(lux[i]);  }
-    if(lux[i] - luxThreshhold > 0){
+    if(platform[i].lux - luxThreshhold > 0){
       //if (testMode==1) {Serial.println("lights are ON");}
       if (luxReportedHigh[i]==0) {
         luxReportedHigh[i]=1 ;
         luxReportedLow[i] = 0;
         flag=1; //postToIfTTT(); 
-        if (testMode==1) {Serial.print(F("; Lights on alert")); }
+        //if (testMode==1) {Serial.print(F("; Lights on alert")); }
       }
     }else{
       //if (testMode==1) {Serial.println("Lights are OFF");}
@@ -1186,19 +1201,19 @@ lux:
         luxReportedLow[i]=1 ;
         luxReportedHigh[i] = 0;
         flag=1; //postToIfTTT(); 
-        if (testMode==1) {Serial.print(F("; Lights off alert")); }
+        //if (testMode==1) {Serial.print(F("; Lights off alert")); }
        }
     }
     }
 doors:
     if(iftDoors[i]==1){
-    if(door[i] == 1){
+    if(platform[i].door == 1){
       ////if (testMode==1) {Serial.println("door open");}
       if (doorReportedHigh[i]==0) {
         doorReportedHigh[i]=1 ;
         doorReportedLow[i] = 0;
         flag=1; //postToIfTTT(); 
-        if (testMode==1) {Serial.print(F(" ;door open alert")); }
+        //if (testMode==1) {Serial.print(F(" ;door open alert")); }
       }
     }else{
      // //if (testMode==1) {Serial.print("door closed");}
@@ -1206,25 +1221,25 @@ doors:
         doorReportedLow[i]=1 ;
         doorReportedHigh[i] = 0;
         flag=1; //postToIfTTT();
-        if (testMode==1) {Serial.println(F(" ;door closed alert")); }
+        //if (testMode==1) {Serial.println(F(" ;door closed alert")); }
        }
     }
     }
 h2o:
     if(iftH2os[i]==1){
-    if(aH2o[i] -100 > 0){
+    if(platform[i].aH2o - h2oThreshhold > 0){
       if (h2oReportedHigh[i]==0) {
         h2oReportedHigh[i]=1 ;
         h2oReportedLow[i] = 0;
         flag=1; //postToIfTTT(); 
-       if (testMode==1) {Serial.print(F("; flood alert")); }
+       //if (testMode==1) {Serial.print(F("; flood alert")); }
       }
     }else{
       if (h2oReportedLow[i]==0) {
         h2oReportedLow[i]=1 ;
         h2oReportedHigh[i] = 0;
         flag=1; //postToIfTTT();
-        if (testMode==1) {Serial.print(F("; NO flood alert")); }
+        //if (testMode==1) {Serial.print(F("; NO flood alert")); }
        }
     }
     }
@@ -1259,7 +1274,7 @@ void readBatteryVoltage (uint8_t i){  //crashes if using fona - send 2500 for no
 //**********************************        
 bool readNetStatus() {
   #ifdef testMode
-    Serial.println(F("readNetStatus*"));*
+    Serial.println(F("readNetStatus*"));
   #endif     
 
   int i = fona.getNetworkStatus();
@@ -1342,17 +1357,22 @@ uint8_t readSensorData(uint8_t i){             // temp & voltage
   
      if(luxs[i]==1){         //read photocell if present
        platform[i].lux =  2.44*(analogRead(pinPhotoCell)/100); //whole number 1-99 %
-     }  
+     }else{
+       platform[i].lux = 0; 
+     }
   
      if(h2os[i]==1){         //read water detecter if present
        platform[i].aH2o = 2.44*(4095-analogRead(pinAleak))/100;   //whole number 1-99 %
        platform[i].dH2o = digitalRead(pinDleak);
+     }else{
+       platform[i].aH2o = 0; 
+       platform[i].dH2o = 0; 
      }
       
   }else if (sensors[i]=="wifi"){ 
     #ifdef WIFI
       // Check WiFi connection status
-      #ifdef testMode
+      #ifdef printMode
           Serial.print(F("WL_CONNECTED = "));Serial.println(WL_CONNECTED);
           Serial.print(F("WiFi.status() = "));Serial.println(WiFi.status());
       #endif
@@ -1364,8 +1384,10 @@ uint8_t readSensorData(uint8_t i){             // temp & voltage
         String payload = "--"; 
         if(temps[i]==1){
           payload = httpGETRequest(serverNameTemperature);
+Serial.println(payload);
           if (payload!="--"){    //retain prior reading if no data so we dont trigger ifttt
             platform[i].temperature = payload.toFloat();
+ 
           }
         }
         if (hums[i]==1){ 
@@ -1397,6 +1419,9 @@ uint8_t readSensorData(uint8_t i){             // temp & voltage
           payload = httpGETRequest(serverNameDoor);
           platform[i].door = payload.toFloat();
         }  
+        
+        platform[i].id=i;  //indicate successful data read
+        
        }else{ 
          returnFlag=0;      //causes fail ? displayed on oled
        }
@@ -1413,6 +1438,9 @@ uint8_t readSensorData(uint8_t i){             // temp & voltage
       }
     #endif
   }
+  #ifdef testMode
+    Serial.print("returnFlag = ");Serial.println (returnFlag);  
+  #endif
   return(returnFlag);
 }
 
@@ -1593,7 +1621,8 @@ void setupOledDisplay(){
   #endif  
 }
 //*********************************
-void setupPinModes(){                //Set Pin Modes INPUT / OUTPUT
+void setupPinModes(){                
+  //Set Pin Modes INPUT / OUTPUT
   #ifdef testMode
      Serial.println(F("*setupPinModes*"));
   #endif
@@ -1604,8 +1633,37 @@ void setupPinModes(){                //Set Pin Modes INPUT / OUTPUT
     digitalWrite(pinFONA_RST, HIGH); // Default state
     digitalWrite(pinFONA_PWRKEY, OUTPUT); //210220 ??
   #endif
-  turnOffBoardLED();
+  //pinMode (pinDoor, INPUT_PULLUP);
+  pinMode (pinDleak, INPUT_PULLUP);
+  pinMode (pinAleak, INPUT); 
 }
+
+//*********************************
+void setupSensors(){             // Wake up the MCP9808 if it was sleeping
+  #ifdef printMode
+     Serial.println(F("*WakeUpSensors*"));
+  #endif
+  #ifdef BME_ 
+    bool bme280=bme.begin(0x76);
+    if (!bme280){
+       #ifdef printMode
+          Serial.println(F("Failed to initiate bme280"));
+       #endif
+    }
+  #endif
+    #ifdef DHT_
+    dht.begin();
+    delay(100);
+  #endif
+  #ifdef MCP9808_      
+    if (!tempsensor.begin()) {
+      #ifdef printMode
+         Serial.println(F(" Couldn't find the MCP9808!"));
+      #endif  
+    } 
+  #endif
+}
+
 //*********************************
 int setupSimModule() {  
   #ifdef printMode
@@ -1653,7 +1711,7 @@ int setupSimModule() {
   return(0);
 }
 //***********************************
-int setupWifi(int i){
+int setupWifi(uint8_t i){
 #ifdef WIFI  
   if (sensors[i]=="local"){return 0;}
   #ifdef printMode 
@@ -1671,7 +1729,7 @@ int setupWifi(int i){
     #endif
     attempt++;
   }
-  if (attempt >4){
+  if (attempt >=5){
     #ifdef printMode
       Serial.print(F(" failed to connect to ssid "));Serial.println(wifiSSID[i]);
     #endif
@@ -1726,6 +1784,7 @@ void turnOnBoardLED(){              // Turn LED on if in test mode
     digitalWrite(pinBoardLED, HIGH);
   #endif
 } 
+
 //*********************************    
 void turnOffBoardLED(){             // Turn LED off
   #ifdef  LILLYGO 
@@ -1734,24 +1793,3 @@ void turnOffBoardLED(){             // Turn LED off
     digitalWrite(pinBoardLED, LOW);
   #endif
 }    
-//*********************************
-void wakeUpSensors(){             // Wake up the MCP9808 if it was sleeping
-  #ifdef testMode
-     Serial.println(F("*WakeUpSensors*"));
-  #endif
-  #ifdef MCP9808_      
-    if (!tempsensor.begin()) {
-      #ifdef testMode
-         Serial.println(F(" Couldn't find the MCP9808!"));
-      #endif  
-    } 
-  #endif
-  #ifdef BME_ 
-    bool bme280=bme.begin(0x76);
-    if (!bme280){
-       #ifdef testMode
-          Serial.println(F("Failed to initiate bme280"));
-       #endif
-    }
-  #endif
-}
