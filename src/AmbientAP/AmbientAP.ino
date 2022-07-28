@@ -1,9 +1,6 @@
 
-const char* VERSION = "AmbientAP 2022 v7.14";
+const char* VERSION = "AmbientAP 2022 v7.19";
 
- /*
-  * 7/15 move pinDoor and define as input_pullup
-  */
 /*////////////////////////////////////////////////////////////////////////////////////
 
 I HOPE THIS SOFTWARE IS USEFUL TO YOU. 
@@ -79,7 +76,7 @@ NOTES -  1. IF using MELife for ESP32 ESP-32S Development Board, use Arduino IDE
   #define OLED_               //option: comment out if no oled display 128x64
   //#define oledFormat1       // displays only temp humidity pressure on OLED display
   #define oledFormat2         // displays all sensors on OLED display
-  #define h2oThreshhold  20   // wet - dry threshhold % for OLED display
+  #define h2oThreshhold  10   // wet - dry threshhold % for OLED display
 
   //*****************                                                                                    //*****************
   // 2. Timing Parameters
@@ -89,8 +86,8 @@ NOTES -  1. IF using MELife for ESP32 ESP-32S Development Board, use Arduino IDE
   const long awakeSeconds = 2*60;      //2*60 default interval in seconds to stay awake as server; ignored if sleepSeconds = 0 
   const long chillSeconds = 30;        //interval between readings if sleepSeconds = 0 slows serial monitor updates
 
-  RTC_DATA_ATTR int bootCount = 0;     //increment by 1 each time the processor wakes up
-  #define bootResetCount 6*24    //10 min/wakeup period x6 = 60 min x 24 = 24 hrs; i.e., reset once per day
+  RTC_DATA_ATTR int bootCount = 0;    //increment by 1 each time the processor wakes up
+  #define bootResetCount 6*24         //10 min/wakeup period x6 = 60 min x 24 = 24 hrs; i.e., reset once per day
   
   //*****************
   // 3. Select one hardware device below and comment out the other: 
@@ -98,15 +95,15 @@ NOTES -  1. IF using MELife for ESP32 ESP-32S Development Board, use Arduino IDE
   // pwr on & off pulse duration, and onboard LED on/off states
   //*****************
   #define ESP32           //Recommended choice is esp32
-  //#define ESP8266       //use for wemos D1 Mini.  NOTE - Use if only one AmbientAP sensor exists.
+  //#define ESP8266       //use for wemos D1 Mini.  
                           //Multiple D1 Minis seem to interfere with one another and have limited range
 
   //*****************
   // 4. Select one platform temperature sensor:
   //****************
-  #define DHT_            // DHT11,21,22, etc.
   //#define BME_          // BME280
-
+  #define DHT_            // DHT11,21,22, etc.
+  
   //*****************
   // 5. Select one of the 3 following protocols for communication between HUB and sensor platforms; 
   // ESPNOW_1to1 is preferred; NOTE: WIFI is a memory hog:
@@ -120,6 +117,7 @@ NOTES -  1. IF using MELife for ESP32 ESP-32S Development Board, use Arduino IDE
   //******************
   #ifdef ESPNOW_1to1
     uint8_t broadcastAddress[] = {0xAC, 0x67, 0xB2, 0x2B, 0x6D, 0x00};  //example for esp32 #7 MAC Address AC:67:B2:2B:6D:00
+                                                                         // lillygo 2: 40:91:51:30:62:94
   #endif
   #ifdef ESPNOW_1toN
     //comment these out and use your own AmbientHUB or other peer MAC addresses:
@@ -141,22 +139,23 @@ NOTES -  1. IF using MELife for ESP32 ESP-32S Development Board, use Arduino IDE
   // 7. ESP32 PIN DEFINITIONS
   //    note: esp32 set pin 15 low prevents startup log on Serial monitor - 
   //          good to know for battery operation
-  //    From 363-ESP Pri 1 pins - The guy with the swiss accent:
+  //    From 363-ESP32 Pri 1 pins - The guy with the swiss accent:
   //      Pri1: GPIO 4*,5,16,17,18,19,23,32,33; (16,17 not available on Wrover)
   //      Pri2: (input only, no internal pullup) GPIO 34,35,36,39.
-  //      Do not use ADC2 (GPIO 2,4*,12-15, 25-27 if using wifi ??? haven't seen this anywhere else
+  //      Do not use ADC2 (GPIO 2,4*,12-15, 25-27) if using wifi.
   //      Reserve GPIO 21,22 for I2C bus
-  //      GPIO's 14,16,17,18,19,21-23 have pullups
-  //      Can use 1,2,4,12-15, 25-27, 32-39 as wakeup source; avoid conflict w/ wifi by using only 32-39 
+  //      GPIO's 14,16,17,18,19,21-23 have internal 10K pullup resisters
+  //      Can use 1,2,4,12-15, 25-27, 32-39 as wakeup (interrupt) source; avoid conflict w/ wifi by using only 32-39 
   //*****************
   #ifdef ESP32
     #define pinBoardLED 2               //onboard LED
     #define pinDoor 35                  //door wired to magnetic reed switch, NO & C connected 
-                                        //  to pinDoor and ground; 100K pullup R to pinDoorin & 3.3v
+                                        //  to pinDoor and ground; 100K pullup R to pinDoor & 3.3v
+                                        //  pinDoor = 1 = closed, 0 = open.
                                         //NOTE if this pin is changed, 
                                         //  change setupInteruptConditions as well.
-    #define pinDleak 39                 //digital moisture digital indicater *                         
-    #define pinAleak 36                 //analog moisture analog measure *
+    #define pinDh2o 18                 //digital moisture digital indicater *                         
+    #define pinAh2o 36                 //analog moisture analog measure *
                                         //   * Hiletgo LM393 FC37 moisture monitor
     #define pinPhotoCell 34             // analog input 
                                         // esp32 analog input; photocell connected to GPIO pin & gnd, 
@@ -170,10 +169,10 @@ NOTES -  1. IF using MELife for ESP32 ESP-32S Development Board, use Arduino IDE
   //***************** 
   #ifdef ESP8266
     #define pinBoardLED 2               //onboard LED
-    #define pinDoor 15                  //door switch D8
-    #define pinDleak 13                 //analog input D7                             
-    #define pinAleak 12                 //analog input D6
-    #define pinPhotoCell A0             //analog input (white wire on bedroom board)
+    #define pinDoor 14                  //door switch D5
+    #define pinDh2o 13                  //digital flood sensor input D7                             
+    //#define pinAh2o                     //analog flood sensor not connected
+    #define pinPhotoCell A0             //analog input 
   #endif
 
   //*****************
@@ -197,13 +196,13 @@ NOTES -  1. IF using MELife for ESP32 ESP-32S Development Board, use Arduino IDE
   //  10. Each sensor board needs unique display title and ssid; 
   //  uncomment one triplet and comment // the others:
   //*****************
-  uint8_t sensorID = 1;
-  #define displayTitle " ~AMBIENT 1~"  
-  const char* ssid = "AMBIENT_1";
+  //uint8_t sensorID = 1;
+  //#define displayTitle " ~AMBIENT 1~"  
+  //const char* ssid = "AMBIENT_1";
   
-  //uint8_t sensorID = 2;    
-  //#define displayTitle " ~AMBIENT 2~"
-  //const char* ssid = "AMBIENT_2";
+  uint8_t sensorID = 2;    
+  #define displayTitle " ~AMBIENT 2~"
+  const char* ssid = "AMBIENT_2";
   
   //uint8_t sensorID = 3;
   //#define displayTitle " ~AMBIENT 3~"
@@ -226,8 +225,8 @@ NOTES -  1. IF using MELife for ESP32 ESP-32S Development Board, use Arduino IDE
       float pressure;          // mb
       uint8_t lux;             // 0-99 % of full illumination
       uint8_t aH2o;            // 0-99 % of full sensor level detection
-      uint8_t dH2o;            // 0 or 1 digital readout 1=flood  
-      uint8_t door;            // 0 or 1 door open or closed 1=open
+      uint8_t dH2o;            // 0 or 1 digital readout 0=dry  (normal state)
+      uint8_t door;            // 0 or 1 door open or closed. door = 0 when closed (normal state)
   } platforms;
   
   #ifdef ESP32  //store the reaadings persistently if esp32
@@ -313,7 +312,7 @@ void setup(){
     printWakeupReason();
     printSensorData();
   #endif
-  restartIfTime();              //restart ea 24 hrs in case hangups exist 
+  restartIfTime();              //restart ea 24 hrs  
   readDoor();                   //read door status
   readAh2o();                   //read analog flood level value
   readDh2o();                   //read digital flood indicater
@@ -321,7 +320,7 @@ void setup(){
   setupSensors();               //initialize sensors (can delay 2-4 seconds for sensor ready)
   readTemperature();            //valid data updates temperature and temp; invalid updates only temp with  "--"
   readHumidity();               //valid data updates humidity and hum; invalid updates only hum with  "--"
-  readPressure();               //valid data updates pressure1 and pres; invalid updates only pres with  "--"              
+  readPressure();               //valid data updates pressure and pres; invalid updates only pres with  "--"              
   setupOledDisplay();           //prepare the oled display if #define includeOled is enabled
   displayStatus();              //display latest valid sensor readings on oled display if #define incledeOled is enabled
   setupWifiServer();            //initialize wifi server if #define WIFI is enabled
@@ -341,16 +340,15 @@ void setup(){
 /////////////////////////////////
 void loop(){ 
   //Execute repeatedly if system did not go to sleep during setup
-  if (sleepSeconds == 0){  
-                               //if unit does not sleep, read all sensors if chillSeconds has elapsed since last reading
-    if(chillTimeIsUp(chillSeconds*1000)==1){ //slow down loop for serial monitor readability + sensor R&R   
+  if (sleepSeconds == 0){      //if unit does not sleep, read all sensors if chillSeconds has elapsed since last reading                              
+    if(chillTimeIsUp(chillSeconds*1000)==1){   //slow down loop for serial monitor readability + sensor R&R   
       readDoor();
       readAh2o();
       readDh2o();
       readPhotoCell();       
-      readTemperature();      //valid data updates temperature1 and temp; invalid updates only temp with  "--"
-      readHumidity();         //valid data updates humidity1 and hum; invalid updates only hum with  "--"
-      readPressure();         //valid data updates pressure1 and pres; invalid updates only pres with  "--"                 
+      readTemperature();      //valid data updates temperature and temp; invalid updates only temp with  "--"
+      readHumidity();         //valid data updates humidity and hum; invalid updates only hum with  "--"
+      readPressure();         //valid data updates pressure and pres; invalid updates only pres with  "--"                 
       displayStatus();        //display latest vald sensor readings on oled display if #define incledeOled is enabled
     }   
   }else{                  
@@ -436,25 +434,25 @@ void displayStatus(){
       if(sensorData.aH2o - h2oThreshhold > 0){  //display leak status in real time
         oled.print("WET    ");
         #ifdef printMode
-          Serial.println(" FLOOR WET");
+          Serial.println(" FLOOR aH2o WET");
         #endif  
       }else{
         oled.print("DRY    ");
         #ifdef printMode
-          Serial.println(" FLOOR DRY");
+          Serial.println(" FLOOR aH2o DRY");
         #endif  
       }
-        
+
       //oled.print("DOOR ");
       if(sensorData.door==0){
-        oled.println("OPEN");
-        #ifdef printMode
-          Serial.println(" DOOR OPEN");
-        #endif  
-      }else{
         oled.println("SHUT");
         #ifdef printMode
           Serial.println(" DOOR SHUT");
+        #endif  
+      }else{
+        oled.println("OPEN");
+        #ifdef printMode
+          Serial.println(" DOOR OPEN");
         #endif  
       }
     #endif  
@@ -465,7 +463,7 @@ void displayStatus(){
 //***ESP NOW One to One Callback function***************  
 #ifdef ESPNOW_1to1  
   void ESPNOW_1to1_OnDataSent(const uint8_t *mac_addr, esp_now_send_status_t status) {
-  //callback verifies successful receipt after message was sent (see loop below for sendEspNow_1to1 function)
+    //callback verifies successful receipt after message was sent (see loop below for sendEspNow_1to1 function)
     #ifdef printMode
       Serial.println(F("*OnDataSent*"));
       Serial.print(F("\r\nLast Packet Send Status:\t"));
@@ -623,7 +621,7 @@ void readAh2o(){
     Serial.println(F("*readAh2o*"));
   #endif  
 //  turnOnBoardLED(); 
-  sensorData.aH2o = 2.44*(4095-analogRead(pinAleak))/100;   //whole number 1-99 %
+  sensorData.aH2o = 2.44*(4095-analogRead(pinAh2o))/100;   //whole number 1-99 %
   #ifdef printMode
     Serial.print("aH2o: ");Serial.print(sensorData.aH2o);Serial.println(F("% "));
   #endif
@@ -635,7 +633,14 @@ void readDh2o(){
   #ifdef printMode
     Serial.println(F("*readDh2o*"));
   #endif  
-  sensorData.dH2o = digitalRead(pinDleak);
+  //sensor reads 1 when dry, 0 when wet
+  //we want 0=dry (normal status)
+  sensorData.dH2o = digitalRead(pinDh2o);
+  if (sensorData.dH2o >0){
+    sensorData.dH2o = 0;
+  }else{ 
+    sensorData.dH2o = 1; 
+  }
   #ifdef printMode
     Serial.print("dH2o: ");Serial.println(sensorData.dH2o);
   #endif  
@@ -646,8 +651,15 @@ void readDoor(){
   #ifdef printMode
     Serial.println(F("*readDoor*"));
   #endif
-  //door = 1 when closed
+  //door = 1 when closed, 0 when open due to pullup resister
+  //we want door = 0 when closed (normal state):
   sensorData.door = digitalRead(pinDoor);
+  if (sensorData.door >0){
+    sensorData.door = 0;
+  }else{ 
+    sensorData.door = 1; 
+  }
+  
   #ifdef printMode
     Serial.print("door: ");Serial.println(sensorData.door);
   #endif
@@ -905,12 +917,13 @@ void setupInterruptConditions(){
   //set door interupt based on current state open or closed
   #ifdef printMode
     Serial.println(F("*setupInterruptConditions*"));
+    Serial.print(F("door = "));Serial.println(sensorData.door);
   #endif 
-  if(sensorData.door==0){
-    esp_sleep_enable_ext0_wakeup(GPIO_NUM_35,1); //1 = High CLOSED, 0 = Low OPPEN
+  if(sensorData.door==0){  //processed door = 1 when raw data dooor = 0
+    esp_sleep_enable_ext0_wakeup(GPIO_NUM_35,0); //0 = High OPEN 1 = Low CLOSED
     //esp_sleep_enable_ext0_wakeup(pinDoor,1); 
   }else{
-    esp_sleep_enable_ext0_wakeup(GPIO_NUM_35,0);  
+    esp_sleep_enable_ext0_wakeup(GPIO_NUM_35,1);  
 
   } 
 }      
@@ -938,10 +951,15 @@ void setupPinModes(){
     Serial.println(F("*setupPinModes*"));
   #endif   
   pinMode(pinBoardLED,OUTPUT);
-  pinMode (pinDoor, INPUT_PULLUP);
-  pinMode (pinDleak, INPUT);
-  pinMode (pinAleak, INPUT);
+  pinMode (pinDoor, INPUT);
   pinMode (pinPhotoCell, INPUT);
+  #ifdef ESP32
+    pinMode (pinAh2o, INPUT);
+    pinMode (pinDh2o, INPUT_PULLUP);
+  #endif
+  #ifdef ESP8266
+    pinMode (pinDh2o, INPUT);
+  #endif  
 }
 
 //*********************************
@@ -962,7 +980,7 @@ void setupSensors(){
   #endif
   #ifdef DHT_
     dht.begin();
-    delay(100);
+    delay(1000);
   #endif
   #ifdef MCP9808_      
     if (!tempsensor.begin()) {
