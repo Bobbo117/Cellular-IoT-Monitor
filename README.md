@@ -20,7 +20,7 @@ The **AmbientHUB** software controls an **ESP32** micro-controller connected to 
 <br>
 
 ## Tested With
-It
+
 -   **Botletics** `SIM7000A` cellular modem Arduino shield
 
 -   **LiLLYGO** `SIM7000G` board with integrated **ESP32** Wrover
@@ -47,15 +47,11 @@ The **AmbientHUB** software collects the sensor values for hourly transmission v
 
 ### Supported Services
 
--    'Adafruit-io.com' MQTT for graphic <br>
-     display and redundant IFTTT webhook <br>
-     route
+-    'Adafruit-io.com' MQTT for graphic display and redundant IFTTT webhook route
 
--   `IFTTT.com` for transmission to up to <br>
-    20 email accounts plus Google sheets
+-   `IFTTT.com` for transmission to up to 20 email accounts plus Google sheets
 
--   `Dweet.io` which simply saves the <br>
-    messages in scratchpad format
+-   `Dweet.io` which simply saves the messages in scratchpad format
 
 <br>
 
