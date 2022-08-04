@@ -1,4 +1,4 @@
-# Cellular IoT Monitor   [![Badge License]][License]
+&# Cellular IoT Monitor   [![Badge License]][License]
 
 *Transmit sensor data in remote locations without internet.*
 
@@ -47,9 +47,9 @@ The **AmbientHUB** software collects the sensor values for hourly transmission v
 
 ### Supported Services
 
--    'Adafruit-io.com' MQTT for graphic display and redundant IFTTT webhook route
+-    'io.Adafruit.com' MQTT for graphic display and redundant IFTTT webhook route
 
--   `IFTTT.com` for transmission to up to 20 email accounts plus Google sheets
+-   `IFTTT.com` for notifying to up to 20 email accounts plus Google sheets
 
 -   `Dweet.io` which simply saves the messages in scratchpad format
 
