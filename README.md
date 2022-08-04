@@ -34,13 +34,9 @@ It
 
 The **AmbientHUB** software can receive the **AmbientAP** sensor data using the listed protocols.
 
--  `http` where each sensor is configured <br>
-    as a server which can be polled by the <br>
-    hub using a **GET** command.
+-  `http` where each sensor is configured as a server which can be polled by the hub using a **GET** command.
 
--   `ESP-Now` a lighter footprint protocol by <br>
-    which the sensors push the data to the <br>
-    hub based on its MAC address.
+-   `ESP-Now` a lighter footprint protocol by which the sensors push the data to the hub based on its MAC address.
 
 <br>
 <br>
