@@ -20,8 +20,8 @@ The **AmbientHUB** software controls an **ESP32** micro-controller connected to 
 <br>
 
 ## Tested With
-
--   **Botletics** `SIM7000A` cellular IoT modem
+It
+-   **Botletics** `SIM7000A` cellular modem Arduino shield
 
 -   **LiLLYGO** `SIM7000G` board with integrated **ESP32** Wrover
 
@@ -51,6 +51,10 @@ The **AmbientHUB** software collects the sensor values for hourly transmission v
 
 ### Supported Services
 
+-    'Adafruit-io.com' MQTT for graphic <br>
+     display and redundant IFTTT webhook <br>
+     route
+
 -   `IFTTT.com` for transmission to up to <br>
     20 email accounts plus Google sheets
 
@@ -63,8 +67,6 @@ The **AmbientHUB** software collects the sensor values for hourly transmission v
 
 - **Google Sheets** directly without **IFTTT**
 
-- **MQTT** to **TBD** destination
-
 - **ThingsBoard**
 
 <br>
@@ -73,7 +75,7 @@ The **AmbientHUB** software collects the sensor values for hourly transmission v
 ## Threshold Alert
 
 The **AmbientHUB** software can be configured to provide <br>
-**IFTTT** an immediate alert should a sensor exceed a predetermined threshold.
+immediate alerts should a sensor exceed a predetermined threshold.
 
 <br>
 
@@ -89,7 +91,7 @@ The **AmbientHUB** software can be configured to provide <br>
 
 ### Added July 2022
 
--   door / window open / closed sensors
+-   door / window sensors
 
 -   illumination sensors
 
