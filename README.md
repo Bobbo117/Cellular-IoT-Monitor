@@ -1,4 +1,4 @@
-# Cellular IoT Monitor   [![Badge License]][License]
+&# Cellular IoT Monitor   [![Badge License]][License]
 
 *Transmit sensor data in remote locations without internet.*
 
@@ -12,18 +12,22 @@ The HUB can operate as a stand-alone unit with its own sensors.
 
 Alternatively, the HUB can collect data wirelessly from up to three separate local sensor platforms.
 
-The hub software - **AmbientHUB** - and the sensor software - **AmbientAP** - are written in C++ with the help of the **Arduino IDE**.
+The hub software - **AmbientHUB** - and the sensor software - **AmbientAP** - are written in C++ with the 
+help of the **Arduino IDE**.
 
-The **AmbientHUB** software controls an **ESP32** micro-controller connected to a temperature / humidity sensor and an optional **OLED** display.
+The **AmbientHUB** software controls an **ESP32**
+micro-controller connected with onboard sensors 
+and an optional **OLED** display.
 
 <br>
 <br>
 
 ## Tested With
 
--   **Botletics** `SIM7000A` cellular IoT modem
+-   **Botletics** `SIM7000A` cellular modem Arduino shield
 
--   **LiLLYGO** `SIM7000G` board with integrated **ESP32** Wrover
+-   **LiLLYGO** `SIM7000G` board with 
+    integrated **ESP32** Wrover
 
 -   **Global** `SIM7000A` module
 
@@ -32,14 +36,15 @@ The **AmbientHUB** software controls an **ESP32** micro-controller connected to 
 
 ## Supported Protocols
 
-The **AmbientHUB** software can receive the **AmbientAP** sensor data using the listed protocols.
+The **AmbientHUB** software can receive the **AmbientAP** 
+sensor data using the listed protocols.
 
--  `http` where each sensor is configured <br>
-    as a server which can be polled by the <br>
-    hub using a **GET** command.
+-  `http` where each sensor is configured 
+   as a server which can be polled by the 
+   hub using a **GET** command.
 
--   `ESP-Now` a lighter footprint protocol by <br>
-    which the sensors push the data to the <br>
+-   `ESP-Now` a lighter footprint protocol by 
+    which the sensors push the data to the 
     hub based on its MAC address.
 
 <br>
@@ -47,23 +52,23 @@ The **AmbientHUB** software can receive the **AmbientAP** sensor data using the 
 
 ## Formatting Options
 
-The **AmbientHUB** software collects the sensor values for hourly transmission via the **Hologram** IoT cellular platform to the listed website services.
+The **AmbientHUB** software collects the sensor values 
+for hourly transmission via the **Hologram** IoT cellular 
+platform to the listed website services.
 
 ### Supported Services
 
--   `IFTTT.com` for transmission to up to <br>
-    20 email accounts plus Google sheets
+-    'io.Adafruit.com' MQTT for graphic display and redundant IFTTT webhook route
 
--   `Dweet.io` which simply saves the <br>
-    messages in scratchpad format
+-   `IFTTT.com` for notifying to up to 20 email accounts plus Google sheets
+
+-   `Dweet.io` which simply saves the messages in scratchpad format
 
 <br>
 
 ### Planned
 
 - **Google Sheets** directly without **IFTTT**
-
-- **MQTT** to **TBD** destination
 
 - **ThingsBoard**
 
@@ -73,7 +78,7 @@ The **AmbientHUB** software collects the sensor values for hourly transmission v
 ## Threshold Alert
 
 The **AmbientHUB** software can be configured to provide <br>
-**IFTTT** an immediate alert should a sensor exceed a predetermined threshold.
+immediate alerts should a sensor exceed a predetermined threshold.
 
 <br>
 
@@ -89,7 +94,7 @@ The **AmbientHUB** software can be configured to provide <br>
 
 ### Added July 2022
 
--   door / window open / closed sensors
+-   door / window sensors
 
 -   illumination sensors
 
