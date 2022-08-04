@@ -1,6 +1,5 @@
 
-const char* VERSION = "AmbientHUB 2022 v7.20";
-
+const char* VERSION = "AmbientHUB 2022 v8.04";
 
 /*////////////////////////////////////////////////////////////////////////////////////
 
@@ -26,8 +25,7 @@ OR THE USE OR OTHER DEALINGS IN THE SOFTWARE
 */////////////////////////////////////////////////////////////////////////////////////
 
 /*//////////////////////////////////////////////////////////////////////////////////// 
-The code within the '#ifdef ESPNOW to #endif 
-compiler directives is adapted from the following:
+The code within the '#ifdef ESPNOW to #endif compiler directives is adapted from the following:
     Rui Santos
     Complete project details at https://RandomNerdTutorials.com/esp-now-one-to-many-esp32-esp8266/
     
@@ -38,7 +36,7 @@ compiler directives is adapted from the following:
     copies or substantial portions of the Software.
 *////////////////////////////////////////////////////////////////////////////////////
 
-  /******* ORIGINAL ADAFRUIT FONA LIBRARY TEXT *******
+  /******* ORIGINAL ADAFRUIT FONA LIBRARY TEXT AND MQTT TEXT*******
   This is an example for our Adafruit FONA Cellular Module
   Designed specifically to work with the Adafruit FONA
   ----> http://www.adafruit.com/products/1946
@@ -59,7 +57,7 @@ compiler directives is adapted from the following:
 
 //*********************************************************************************************************
 // AmbientHUB collects onboard and external sensor data and passes it via cellular connection 
-// to your cellphone and other destinations via IFTTT.com and Dweet.io.    
+// to your cellphone and other destinations via MQTT, IFTTT.com, and Dweet.io.    
 //
 //NOTES - 1. IF using MELife ESP32 ESP-32S Development Board, use Arduino IDE "esp32 Dev Module" or "MH ET LIVE ESP32 Devkit"
 //              (tested with Botletics arduino SIM7000A shield and and-global SIM7000A boards - select BOTLETICS hardware device below)
@@ -75,46 +73,70 @@ compiler directives is adapted from the following:
 //           --OFF at kill WiFi with a ssensor
    
 //////////////////////////////////////////////////////////////  
-//*******     Setup IFTTT webhook API Key        ***********//
+//*******     Setup secrets.h file for:        ***********//
+//               a. IFTTT webhook API Key 
+//               b. adafruit mqtt username & key
 //////////////////////////////////////////////////////////////
 
-  //OPTIONS: 1. Replace the YOUR_IFTTT_KEY_GOES_HERE phrase in the #define SECRET_IFTTT_HB_URL... statement below, 
+  //  IFTTT OPTIONS: 
+  //         1. Replace the YOUR_IFTTT_KEY_GOES_HERE phrase in the #define SECRET_IFTTT_HB_URL... statement below 
   //            OR
   //         2. include the #define SECRET_IFTTT_HB_URL... statement in a secrets.h file. 
-             
-  //#define SECRET_IFTTT_HB_URL "http://maker.ifttt.com/trigger/HB/with/key/YOUR_IFTTT_KEY_GOES_HERE"  //heartbeat event HB
-  #include <secrets.h>                  
-  
+  //            
+  //  #define SECRET_IFTTT_HB_URL "http://maker.ifttt.com/trigger/HB/with/key/YOUR_IFTTT_KEY_GOES_HERE"  //heartbeat event HB
+      #include <secrets.h> 
+  //
+  //  AdaFruitIO MQTT OPTIONS
+  //         1. Replace YOUR_USERNAME phrase in the #define SECRET_adaMQTT_USERNAME statement below,
+  //            AND
+  //         2. Replace the YOUR_KEY field in the #define SECRET_adaMQTT_KEY statement below,  
+  //
+  //  #define SECRET_adaMQTT_USERNAME    "YOUR ADAFRUITIO USERNAME HERE"
+  //  #define SECRET_adaMQTT_KEY         "YOUR ADAFRUITIO MQTT KEY HERE"
+  //
+  //            OR
+  //         3. include the #define SECRET_adaMQTT_USERNAME... statement in the secrets.h file. 
+  //            AND
+  //         4. include the #define SECRET_adaMQTT_KEY... statement in the secrets.h file. 
+  // 
+                 
 //////////////////////////////////////////////////////////////  
 //*******         Compile-time Options           ***********//
 //////////////////////////////////////////////////////////////
 
   //*****************
-  // 1. Operatiing Modes - choose any combination
+  // 1. Operatiing Modes - choose any combination 
+  //      1 exception: adaMQTT_Subscribe requires adaMQTT as well.  
+  //                   adaMQTT does not require adaMQTT_Subscribe
   //*****************
-  
-  //#define alarmMode                //  enables alarm ifttt when a measurement crosses threshhold; // = no alarm
+
+  //Cloud Protocols
+  #define adaMQTT                    // enables use of adafruit mqtt publish; // = disable MQTT
+  //#define adaMQTT_Subscribe //needs work!   // enables use of adafruit mqtt subscribe; // = disable 
+  #define iFTTTMode                  // enables use of ifttt; // = disable IFTTT
+  #define dweetMode                  // enables use of dweet; // = disable dweet
+
+  //#define alertMode                //  enables postAlert when a measurement crosses threshhold; // = no alert
   #define cellularMode               //  enables a cellular connection; // = no connection (good for debugging code without racking up cellular costs)
-  #define heartbeatMode              // turns on periodic heartbeat reporting of all readings; // = no heartbeat
-  #define iFTTTMode                  // enables use of ifttt; // = no IFTTT
+
   #define OLED_                      // 64x128 pixel OLED display if hub uses one
   #define printMode                  // comment out if you don't want brief status display of sensor readings, threshholds and cellular interactions to pc
   #define simSleepMode               // shut off sim modem between readings 
   //#define testCellular             // comment out if you dont want to enable test transmission to dweet, ifttt at initial startup
   //#define testMode                 // uncomment for verbose test messages to status monitor 
 
-  //#define ATMode  //needs work!    // uncomment to use AT commands as workarounds to higher level FONA commands 
+  //#define ATMode                    // uncomment to use AT commands as workarounds to higher level FONA commands improves success rate thru ifttt 
 
   //*****************
   // 2. Timing Parameters
   //*****************
   
   const int espSleepSeconds = 48*60;  // or 0; heartbeat period OR wakes up out of sleepMode after sleepMinutes           
-  const long espAwakeSeconds = 12*60; // interval in seconds to stay awake as HUB; you dont need to change this if espSleepSeconds = 0 indicating no sleep
+  const long espAwakeSeconds = 12*60; //12*60; // interval in seconds to stay awake as HUB; you dont need to change this if espSleepSeconds = 0 indicating no sleep
   int heartbeatMinutes = 10;          // 10 heartbeat delay after HUB awakens.  this needs to be at least 2 minutes less thab espAwakeSeconds 
 
   const long serialMonitorSeconds = 5*60; // interval in seconds to refresh serial monitor sensor readings (enhances readability)            
-  const long samplingRateSeconds = 10;    // interval in seconds between sensor readings in alert mode
+  const long samplingRateSeconds = 10;    // interval in seconds between sensor readings in alertMode
 
   //*****************
   // 3. Assign a short prefix to the data being sent to the cloud 
@@ -152,7 +174,7 @@ compiler directives is adapted from the following:
   // 7. Sensor Inventory
   //*****************
   
-  #define numberOfPlatforms 4         // number of sensor platforms available + 1 for HUB
+  #define numberOfPlatforms 4         // number of sensor platforms available (3 max)  + 1 for HUB
                                       // example: if hub has sensors, and there are 3 wireless platforms, numberOfPlatforms = 4
                                       
   // arrays to indicate types of sensors aboard each sensor platform (1=presnt, 0 = absent)
@@ -186,12 +208,14 @@ compiler directives is adapted from the following:
   const char* sensors[]={"local","wifi","wifi","wifi"};
   
   char buf[200],buf2[20]; //formatData() sets up buf with data to be sent to the cloud. Buf2 is working buffer.
-     
+   
+  uint8_t postTries = 3;  //allowed data post attempts
+  
   uint8_t alert[numberOfPlatforms]; // used to accumulate # sensors that have alert condition
   #define h2oThreshhold  20         // water threshhold % which will cause display or IFTTT alert if enabled
   #define luxThreshhold  45         // light threshhold % which will cause display or IFTTT alert if enabled
 
-  #ifdef alarmMode
+  #ifdef alertMode
     //Arrays to indicate which sensors can be used to generate IFTTT alert
     uint8_t iftTemps[] = {1,1,1,1}, iftHums[]={0,0,0,0}, iftLuxs[]={0,1,0,0}, iftH2os[]={0,1,0,0}, iftDoors[]={0,0,1,1};
     
@@ -324,6 +348,7 @@ compiler directives is adapted from the following:
   // OLED Libraries
   //*****************
   #ifdef OLED_
+    #define FORMAT1  //HUB only format with temp hum pres dbm sensors
     #include "SSD1306Ascii.h"     // low overhead library text only
     #include "SSD1306AsciiWire.h"
     #define I2C_ADDRESS 0x3C      // 0x3C+SA0 - 0x3C or 0x3D
@@ -356,7 +381,7 @@ compiler directives is adapted from the following:
   // FONA Library
   //*****************
 
-  #include "Adafruit_FONA.h"          //from https://github.com/botletics/SIM7000-LTE-Shield/tree/master/Code
+  #include "Adafruit_FONA.h"  //IMPORTANT! get it from https://github.com/botletics/SIM7000-LTE-Shield/tree/master/Code
   //#include <Adafruit_FONA.h>
   Adafruit_FONA_LTE fona = Adafruit_FONA_LTE();
   #include <HardwareSerial.h>
@@ -370,6 +395,28 @@ compiler directives is adapted from the following:
   #ifdef ESPNOW
     #include <esp_now.h>
     #include <WiFi.h>               //espNow uses its own wifi; no external wifi router is used
+  #endif
+
+  //*****************
+  //  MQTT PARAMETERS
+  //*****************
+
+  #ifdef adaMQTT
+    #include "Adafruit_MQTT.h"
+    #include "Adafruit_MQTT_FONA.h"
+
+    #define adaMQTT_SERVER      "io.adafruit.com"    
+    #define adaMQTT_PORT        1883    //insecure port
+
+    //IMPORTANT - See Secrets file setup instructions above for mqtt credential options                  
+  
+    // Setup the FONA MQTT class by passing in the FONA class and MQTT server and login details.
+    Adafruit_MQTT_FONA mqtt(&fona, adaMQTT_SERVER, adaMQTT_PORT, SECRET_adaMQTT_USERNAME, SECRET_adaMQTT_KEY);
+    Adafruit_MQTT_Publish feed_temp = Adafruit_MQTT_Publish(&mqtt, SECRET_adaMQTT_USERNAME "/f/t");  
+    Adafruit_MQTT_Publish feed_hum = Adafruit_MQTT_Publish(&mqtt, SECRET_adaMQTT_USERNAME "/f/h");
+    Adafruit_MQTT_Publish feed_csv = Adafruit_MQTT_Publish(&mqtt, SECRET_adaMQTT_USERNAME "/f/csv"); 
+    Adafruit_MQTT_Publish feed_cmd = Adafruit_MQTT_Publish(&mqtt, SECRET_adaMQTT_USERNAME "/f/cmd");  
+    Adafruit_MQTT_Subscribe feed_command = Adafruit_MQTT_Subscribe(&mqtt, SECRET_adaMQTT_USERNAME "/feeds/command");
   #endif
 
 //*****************
@@ -393,23 +440,33 @@ void setup() {
       printSensorData();
    #endif
    setupSensors();                  // Wake up the HUB temp sensors 
-   #ifdef cellularMode              // If cellular comms is enabled
-     if (bootCount ==0){            // if first boot (not wakeup)
+   if (bootCount ==0){            // if first boot (not wakeup)
+     #ifdef cellularMode              // If cellular comms is enabled
        powerUpSimModule();          // Power up the SIM7000 module by goosing the PWR pin 
        delay (5000);
        simModuleOffIfSimSleepMode();// Power off the SIM7000 module by goosing the PWR pin if simSleepMode = 1
        #ifdef testCellular          //if we want to test cellular data on first startup
           activateCellular(); 
           readSignalStrength(0);
-          postHeartbeatData();       // upload test data to ifttt.com if enabled
-          postHeartbeatData();       // upload test data to dweet.io if enabled
+          postSensorData();       // upload test data if enabled
           displayStatus(0);          // update OLED display to show test data
           simModuleOffIfSimSleepMode(); // Power off the SIM7000 module by goosing the PWR pin if simSleepMode = 1
-       #endif  
-     }
-   #endif
+       #endif      
+     #endif
+   }  
    delay (5000);
    setupEspNow();                   // initialize communication with with external sensor platforms if enabled
+   #ifdef adaMQTT_Subscribe   
+     activateCellular(); 
+     MQTT_connect();
+     #ifdef printMode
+       Serial.println(F("Subscribe begin............."));
+     #endif
+     mqtt.subscribe(&feed_command); // Only if you're using MQTT
+     #ifdef printMode
+       Serial.println(F("Subscribe complete............."));
+     #endif
+   #endif   
    bootCount++;                     // increment boot counter
 }
 
@@ -417,7 +474,8 @@ void setup() {
 // ***  Loop()  ***
 //*****************
   
-void loop() {    
+void loop() {  
+    
   //0. Go to sleep if snooze mode nap time
     if (espSleepSeconds >0 && espAwakeSeconds >0 && espAwakeTimeIsUp(espAwakeSeconds*1000) ==1 ){
       #ifdef printMode
@@ -451,28 +509,26 @@ void loop() {
       }  
       displayStatus(i);                   // update OLED display if there is one
       platform[i].id=numberOfPlatforms+1; //new data will update id
-      #ifdef alarmMode
+      #ifdef alertMode
         platformStatus[i]=0;              //indicates readiness to read new data 
       #endif      
     }
     delay(5000);                // allow latest display time before toggle timer takes over
 
-    //1a. if alarmMode enabled then send alerts to IFTTT
-    #ifdef alarmMode
+    //1a. if alertMode enabled then post alerts
+    #ifdef alertMode
       uint8_t alerts = 0;             // determine whether we have one or more alerts:    
       for (uint8_t i=0;i<numberOfPlatforms;i++){  //determine if an alarm threshhold was crossed
         alerts=alerts+alert[i];
       }
-      if (alerts>0){              // if we have alerts, activate cellular network and report via ifttt if alarmMode set
-        #ifdef iFTTTMode 
-          #ifdef cellularMode
-            activateCellular(); 
-            readSignalStrength(0);
-            postToIfTTT();
-            displayStatus(0);             // update OLED display 
-            simModuleOffIfSimSleepMode(); // Power off the SIM7000 module by goosing the PWR pin if simSleepMode 
-          #endif
-        #endif  
+      if (alerts>0){              // if we have alerts, activate cellular network and report via ifttt if alertMode set
+        #ifdef cellularMode
+          activateCellular(); 
+          readSignalStrength(0);
+          postAlert();
+          displayStatus(0);             // update OLED display 
+          simModuleOffIfSimSleepMode(); // Power off the SIM7000 module by goosing the PWR pin if simSleepMode 
+        #endif
       }
     #endif
   }
@@ -483,10 +539,10 @@ void loop() {
     if (heartbeatTimeIsUp(heartbeatMinutes*60000L) ==1 ){
       activateCellular();
       readSignalStrength(0);
-      postHeartbeatData();          // upload sensor data to dweet.io or IFTTT if heartbeatMode enabled
+      postSensorData();          
       displayStatus(0);             // update OLED display here to update signal strength
       simModuleOffIfSimSleepMode(); // Power off the SIM7000 module by goosing the PWR pin if simSleepMode
-      #ifdef alarmMode
+      #ifdef alertMode
         for (uint8_t i=0; i<numberOfPlatforms; i++){    //reset for next heartbeat cycle 
           sensorStatus[i]=0; 
         }
@@ -503,6 +559,7 @@ void loop() {
     #endif  
   }
 }
+
 //*********************************
 int activateCellular(){
   #ifdef printMode
@@ -533,6 +590,7 @@ int activateCellular(){
     }
   #endif  
 }
+
 //******************************
 int activateGPRS(){             // Activate General Packet Radio Service
   #ifdef printMode
@@ -560,6 +618,7 @@ int activateGPRS(){             // Activate General Packet Radio Service
   #endif
   return 0;
 }
+
 //*********************************
 void activateModem(){              // Set modem to full functionality
   #ifdef printMode
@@ -596,6 +655,7 @@ void activateModem(){              // Set modem to full functionality
   //fona.setOperatingBand("CAT-M", 12); // AT&T
   //fona.setOperatingBand("CAT-M", 13); // Verizon does not work FL ??
 }
+
 //*********************************
 void blinkBoardLED(int sec){      // Blink board LED for sec seconds at .5 second intervals
   #ifdef testMode 
@@ -608,6 +668,7 @@ void blinkBoardLED(int sec){      // Blink board LED for sec seconds at .5 secon
      delay(500);
   }
 }
+
 //*********************************
 int connectToCellularNetwork() {  
   // Connect to cell network and verify connection every 2s until a connection is made
@@ -649,6 +710,7 @@ int connectToCellularNetwork() {
   
   #endif
 }
+
 //*********************************
 void displayStatus(uint8_t i){
   #ifdef testMode 
@@ -656,32 +718,34 @@ void displayStatus(uint8_t i){
   #endif  
 
   #ifdef OLED_
-    if (numberOfPlatforms>=2){
-      oled.setFont(Arial_14);
-      oled.setCursor(0,16*i);
-      if (sensorStatus[i] ==0){
-        oled.print("?");  //indicates old or no measurement
-      }else{  
-        oled.print(":");  //indicates current measurement
-      }
-    }else{
-      oled.setFont(Arial_bold_14);
-      oled.setCursor(0,0);
+    if (numberOfPlatforms==1){
+      #ifdef FORMAT1  //HUB only format with temp hum pres dbm sensors
+        oled.clear(); 
+        //oled.setFont(Arial_bold_14);
+        oled.setFont(fixed_bold10x15);
+        oled.setCursor(0,0);
+        oled.print("Temp: ");oled.print(int(platform[i].temperature+.5));oled.println(" F");
+        oled.print("Hum:  ");oled.print(int(platform[i].humidity+.5));oled.println(" %");
+        oled.print("Pres: ");oled.print(int(platform[i].pressure+.5));oled.println(" mb");
+        oled.print("dbm:  ");oled.println(dbm[i]);
+      #endif
+    }else{  
+    oled.setFont(Arial_14);
+    oled.setCursor(0,16*i);
+    if (sensorStatus[i] ==0){
+      oled.print("?");  //indicates old or no measurement
+    }else{  
+      oled.print(":");  //indicates current measurement
     }
-    int value = platform[i].temperature + .5;
-    oled.print(value);
+
+    oled.print(int(platform[i].temperature + .5));
     oled.print(" ");  
-    value = platform[i].humidity + .5;
-    oled.print(value);
+    oled.print(int(platform[i].humidity + .5));
     oled.print("% ");
   
-    if (i>=1){
-      //if (dbms[i]==1){oled.print(9+dbm[i]/10);}else{oled.print("-");}
-      if (dbms[i]==1){oled.print(dbm[i]/10);}else{oled.print("-");}
-    }else{
-      oled.print(dbm[i]); 
-    }
-  
+    //if (dbms[i]==1){oled.print(9+dbm[i]/10);}else{oled.print("-");}
+    if (dbms[i]==1){oled.print(dbm[i]/10);}else{oled.print("-");}
+
     if (h2os[i]==0){oled.print("--- ");
       }else{
         if (platform[i].aH2o - h2oThreshhold > 0){
@@ -705,8 +769,10 @@ void displayStatus(uint8_t i){
       oled.print(platform[i].lux);
       oled.println("%");
     } 
+  }  
   #endif 
 }
+
 //*********************************
 static int displayTimeIsUp(long msec){    //Read data at timed intervals  
   static unsigned long previousMillis = 0;   
@@ -857,7 +923,8 @@ void formatData(){                   //transfer comma separated sensor data to b
   }
   
   //process signal strength last
-  for(int i=0;i<numberOfPlatforms-1;i++){
+  //for(int i=0;i<numberOfPlatforms-1;i++){
+  for(int i=0;i<numberOfPlatforms;i++){  
     if(dbms[i]==1){
       dtostrf(dbm[i], 1, 0, buf2); 
       strcat(buf, buf2);
@@ -929,7 +996,7 @@ void initializeArrays(){
     Serial.println(F("*initializeArrays*"));
   #endif  
   for (uint8_t i=0; i<numberOfPlatforms; i++){ 
-    #ifdef alarmMode
+    #ifdef alertMode
       tempHighThreshReset[i] = tempHighThresh[i];  //do it this way to preserve sleep vars
       tempLowThreshReset[i] = tempLowThresh[i];
     #endif  
@@ -950,143 +1017,296 @@ delay(500);
 }   
 
 //*********************************
-void postHeartbeatData(){       //upload sensor data to dweet.io or IFTTT
+int8_t MQTT_connect() {
+  int8_t retn = -1;  //returns 0 if connection success
+  // Connect and reconnect as necessary to the MQTT server.
+  #ifdef adaMQTT
+    #ifdef printMode
+      Serial.println(F("*MQTT_connect*"));
+    #endif
+    int8_t ret;
+  
+    // Exit if already connected.
+    if (mqtt.connected()) {
+      return 0;
+    }
+  
+    #ifdef printMode
+      Serial.println("Connecting to MQTT... ");
+    #endif
 
-  #ifdef printMode 
-    Serial.println(F("*postHeartbeatData*"));
+    int8_t i = 0;
+    while (i<postTries &&((ret = mqtt.connect()) != 0)) { // connect will return 0 for connected
+      #ifdef printMode
+        Serial.println(mqtt.connectErrorString(ret));
+        Serial.println("Retrying MQTT connection in 5 seconds...");
+      #endif
+      mqtt.disconnect();
+      delay(5000);  // wait 5 seconds
+      i++;
+    }
+    if(i<postTries){
+      retn=0;
+      #ifdef printMode
+        Serial.println("MQTT Connected!");
+      #endif
+    }else{
+      #ifdef printMode
+        Serial.println("MQTT Connection failed!");  
+      #endif  
+    } 
   #endif
-  #ifdef  heartbeatMode  
-    formatData();            // transfer sensor data to buf
-    int i = 0;               // Count the number of failed attempts 
-    if(heartbeatToggle==0){  //if 0, dweet:
-      // GET request use the IMEI as device ID
-      //sprintf(URL, "http://dweet.io/dweet/for/%s?T=%s",imei,buf);  //option provides T= prefix to data
-      //sprintf(URL, "http://dweet.io/dweet/for/%s?%s",imei,buf);
-      snprintf(URL, sizeof(URL),"http://dweet.io/dweet/for/%s?%s",imei,buf);
+  return retn;
+}
 
-      #ifndef ATMode  
+//*********************************
+#ifdef adaMQTT
+int8_t MQTT_publish_checkSuccess(Adafruit_MQTT_Publish &feed, const char *feedContent) {
+  int8_t retn = -1;  //returns 0 if connection success
+    #ifdef printMode
+      Serial.println(F("*MQTT_publish_checkSuccess*"));
+      Serial.println(F("Sending data..."));
+    #endif  
+    uint8_t i=0;
+    while (i<postTries &&(! feed.publish(feedContent))) {
+      i++;
+      delay(5000);
+    }  
+    if(i<postTries){
+      retn=0;
+      #ifdef printMode
+        Serial.print(F("Publish succeeded in tries: "));Serial.println(i+1);
+      #endif
+    }else{
+      #ifdef printMode
+        Serial.println(F("Publish failed!"));  
+      #endif        
+    } 
+ 
+  return retn;
+}
+#endif 
+  
+//************************************
+void postAlert(){                
+  
+  //Post alert to cloud if alertMode is enabled
+  #ifdef printMode 
+     Serial.println(F("*postAlert*"));
+  #endif
+  #ifdef alertMode
+    if(!postSensorData==0){
+      //if failed to post alert,restore adaptive thresholds to enable future alert  
+      for (int i=0; i<numberOfPlatforms;i++){
+        tempHighThresh[i] = tempHighThreshReset[i];
+        tempLowThresh[i] = tempLowThreshReset[i];
         #ifdef printMode
-          Serial.println(F("fona.HTTP_GET_start"));
-          Serial.print(F("URL: ")); Serial.println(URL);
+          Serial.print(F("reseting temp threshholds to "));
+          Serial.print(tempLowThresh[i]);
+          Serial.print(F(" and ")) ;
+          Serial.println(tempHighThresh[i]);
         #endif
-        uint16_t statusCode;
-        int16_t length;
-        while (i < 3 && !fona.HTTP_GET_start(URL,&statusCode, (uint16_t *)&length)) {
+        luxReportedHigh[i] = luxReportedHighReset[i];
+        luxReportedLow[i] = luxReportedLowReset[i];
+        h2oReportedHigh[i] = h2oReportedHighReset[i];
+        h2oReportedLow[i] = h2oReportedLowReset[i];
+        doorReportedHigh[i] = doorReportedHighReset[i];
+        doorReportedLow[i] = doorReportedLowReset[i];
+        platform[i].id = i;
+      }
+    }  
+  #endif
+}
+
+//*********************************
+int8_t postSensorData(){       //upload sensor data to dweet.io or IFTTT
+
+  int8_t retn = -1;  //returns 0 if connection success
+  formatData();      // transfer sensor data to buf
+  uint8_t i;         //keeps track of attempted postings   
+  uint8_t err; 
+  delay(1000);
+  
+  #ifdef printMode 
+    Serial.println(F("*postSensorData*"));
+  #endif
+  #ifdef adaMQTT
+ 
+    retn = MQTT_connect();
+
+    float temp = platform[0].temperature;
+    dtostrf(temp, 1, 2, buf2);
+    MQTT_publish_checkSuccess(feed_temp, buf2);
+    float hum = platform[0].humidity;
+    dtostrf(hum, 1, 2, buf2);
+    MQTT_publish_checkSuccess(feed_hum, buf2);
+    
+    retn = MQTT_publish_checkSuccess(feed_csv, buf);
+//
+    #ifdef adaMQTT_Subscribe  //NEEDS WORK!
+
+      delay(1000);
+      // Wait for incoming subscription packets
+      #ifdef printMode
+        Serial.println(F("readSubscription begin.............")); 
+      #endif
+      Adafruit_MQTT_Subscribe *subscription;
+      while ((subscription = mqtt.readSubscription(5000))) {
+        if (subscription == &feed_command) {
           #ifdef printMode
-            Serial.print(F("."));
+            Serial.print(F("*** Got: "));
+            Serial.println((char *)feed_command.lastread);
           #endif
-          Serial.print(F("Dweet failure #")); Serial.println(i);
-          delay(5000);
-          i++; 
         }
+    
         #ifdef printMode
-          Serial.print("statusCode, length: ");Serial.print (statusCode);Serial.print(", ");Serial.println(length);
+          Serial.println(F("readSubscription end.............")); 
+        #endif  
+ 
+        //Control an LED based on what we receive from the command feed subscription!
+        if (strcmp((char *)feed_command.lastread, "ON") == 0) {
+          #ifdef printMode
+            Serial.println(F("*** Commanded to turn on LED!"));
+          #endif
+          turnOnBoardLED();
+          MQTT_publish_checkSuccess(feed_cmd, "ON");
+          delay(5000);
+        }
+        else if (strcmp((char *)feed_command.lastread, "OFF") == 0) {
+          #ifdef printMode
+            Serial.println(F("*** Commanded to turn off LED!"));
+          #endif
+          turnOffBoardLED();
+          MQTT_publish_checkSuccess(feed_cmd, "OFF");
+          delay(5000);
+        }
+      }  
+
+    #endif //adaMQTT_Subscribe 
+  #endif  //adaMQTT
+
+  //exit if successfully posted unless we are in setup mode and testCellular is defined
+  #ifdef testCellular 
+    if(bootCount<1){
+      retn=-1;        
+    }   
+  #endif
+  if (retn==0){
+    return 0;
+  } 
+
+  //Ifttt processing
+  #ifdef iFTTTMode
+    snprintf(body, sizeof(body),"{\"value1\":\"%s\"}", buf);
+    #ifdef printMode
+      Serial.print(F("body: ")); Serial.println(body);
+    #endif 
+    
+    #ifndef ATMode  
+      i=0;
+      while (i < postTries && !fona.postData("POST",SECRET_IFTTT_HB_URL,body)) {
+        #ifdef printMode 
+          Serial.println(F("."));
         #endif
-        fona.HTTP_GET_end();  //causes verbose response AT+HTTPREAD (and? AT+HTTPTERM to terminate HTTP?)
-      #else
-        int err = sendATCmd("AT+HTTPTERM","","");
+        delay(5000);
+        i++;
+      } 
+      
+    #else  //ATMode
+      i=0;
+      do {
+        err = sendATCmd("AT+HTTPTERM","","");
         err = sendATCmd("AT+HTTPINIT","","");
         err = sendATCmd("AT+HTTPPARA","=CID","1");
-        //delay(200);
+        sprintf(URL, "%s?value1=%s",SECRET_IFTTT_HB_URL,buf);
+        delay(200);
         Serial.print("URL: ");Serial.println(URL);
         err = sendATCmd("AT+HTTPPARA","=URL",URL);
         delay(2000);
         err = sendATCmd("AT+HTTPACTION","=0","");
-        err = sendATCmd("AT+HTTPTERM","",""); 
-      #endif
-      heartbeatToggle=1;     
-    }else{               // if 1, ifttt:
-      #ifdef iFTTTMode
-        snprintf(body, sizeof(body),"{\"value1\":\"%s\"}", buf);
-        #ifdef printMode
-          Serial.print(F("body: ")); Serial.println(body);
-        #endif 
-        #ifndef ATMode         
-          while (i < 3 && !fona.postData("POST",SECRET_IFTTT_HB_URL,body)) {
-            #ifdef printMode 
-              Serial.println(F("."));
-            #endif
-            Serial.print("IFTTT failure #"); Serial.println(i);
+        sendATCmd("AT+HTTPTERM","",""); 
+        i++;
+        if(err==0){
+          Serial.print(F("ifttt attempts = "));Serial.println(i);
+          retn = 0;
+        }else{
+          #ifdef printMode
+            Serial.print(F("."));
             delay(5000);
-            i++;
-          }  
-        #else
-          int err = sendATCmd("AT+HTTPTERM","","");
-          err = sendATCmd("AT+HTTPINIT","","");
-          err = sendATCmd("AT+HTTPPARA","=CID","1");
-          sprintf(URL, "%s?value1=%s",SECRET_IFTTT_HB_URL,buf);
-          Serial.print("URL: ");Serial.println(URL);
-          err = sendATCmd("AT+HTTPPARA","=URL",URL);
-          delay(200);
-          err = sendATCmd("AT+HTTPACTION","=0","");
-          err = sendATCmd("AT+HTTPTERM","","");    
-        #endif //ATMode
-      #endif   //IFTTTMode
-      heartbeatToggle=0; 
+          #endif
+        }  
+      } while (i < postTries && err != 0);
+      err = sendATCmd("AT+HTTPTERM","",""); 
+    #endif  //ATMode
+ 
+  #endif   //IFTTTMode
+
+  //exit if successfully posted unless we are in setup mode and estCellular is defined
+  #ifdef testCellular 
+    if(bootCount<1){
+      retn=-1;
     }   
-    #ifdef printMode
-      Serial.print(F("failed attempts = "));Serial.println(i);
-    #endif  
-  #endif //heartbeatMode 
-}
-
-//************************************
-void postToIfTTT(){                //Post alert to IFTTT if iFTTTMode is enabled
-  #ifdef printMode 
-     Serial.println(F("*postToIfttt*"));
   #endif
-  #ifdef iFTTTMode
-  #ifdef alarmMode
-    formatData();                  //transfer ssensor data to buf
-    sprintf(body, "{\"value1\":\"%s\"}", buf);
+  if (retn==0){
+    return 0;
+  } 
 
-    #ifndef ATMode    
+  //dweet processing
+  #ifdef dweetMode
+    // GET request use the IMEI as device ID
+    snprintf(URL, sizeof(URL),"http://dweet.io/dweet/for/%s?%s",imei,buf);
+
+    #ifndef ATMode  
       #ifdef printMode
-        Serial.println(F("body: ")); Serial.println(body);
-      #endif  
-      int attempts=0;                   //try 3 times to POST the URL and JSON body to IFTTT:
-      #ifdef printMode
-        Serial.println(F("fona.postdata('POST',SECRET_IFTTT_HB_URL,body)"));
+        Serial.println(F("fona.HTTP_GET_start"));
+        Serial.print(F("URL: ")); Serial.println(URL);
       #endif
-      while (attempts < 3 && !fona.postData("POST",SECRET_IFTTT_HB_URL,body)) {      Serial.print(F("."));  //original line
-        attempts++;
+      uint16_t statusCode;
+      int16_t length;
+      i = 0;               // Count the number of attempts 
+      while (i < postTries && !fona.HTTP_GET_start(URL,&statusCode, (uint16_t *)&length)) {
+        #ifdef printMode
+          Serial.print(F("."));
+        #endif
+        Serial.print(F("Dweet failure #")); Serial.println(i);
         delay(5000);
+        i++; 
       }
       #ifdef printMode
-        Serial.print(F("failed attempts = "));Serial.println(attempts);
+        Serial.print("statusCode, length: ");Serial.print (statusCode);Serial.print(", ");Serial.println(length);
       #endif
-      if (attempts > 2){  //reset threshholds if failed to post
-        for (int i=0; i<numberOfPlatforms;i++){
-          tempHighThresh[i] = tempHighThreshReset[i];
-          tempLowThresh[i] = tempLowThreshReset[i];
+      fona.HTTP_GET_end();  //causes verbose response AT+HTTPREAD (and? AT+HTTPTERM to terminate HTTP?)
+    #else
+      i=0;
+      do {
+        err = sendATCmd("AT+HTTPTERM","","");
+        err = sendATCmd("AT+HTTPINIT","","");
+        err = sendATCmd("AT+HTTPPARA","=CID","1");
+        delay(200);
+        Serial.print("URL: ");Serial.println(URL);
+        err = sendATCmd("AT+HTTPPARA","=URL",URL);
+        delay(2000);
+        err = sendATCmd("AT+HTTPACTION","=0","");
+        sendATCmd("AT+HTTPTERM","",""); 
+        i++;
+        if(err==0){
+          Serial.print(F("dweet attempts = "));Serial.println(i);
+          return 0;
+        }else{
           #ifdef printMode
-            Serial.print(F("reseting temp threshholds to "));
-            Serial.print(tempLowThresh[i]);
-            Serial.print(F(" and ")) ;
-            Serial.println(tempHighThresh[i]);
+            Serial.print(F("."));
+            delay(5000);
           #endif
-            luxReportedHigh[i] = luxReportedHighReset[i];
-            luxReportedLow[i] = luxReportedLowReset[i];
-            h2oReportedHigh[i] = h2oReportedHighReset[i];
-            h2oReportedLow[i] = h2oReportedLowReset[i];
-            doorReportedHigh[i] = doorReportedHighReset[i];
-            doorReportedLow[i] = doorReportedLowReset[i];
-platform[i].id = i;
         }  
-      } 
-    #else  //send AT codes instead of fona
-      int err = sendATCmd("AT+HTTPTERM","","");
-      err = sendATCmd("AT+HTTPINIT","","");
-      err = sendATCmd("AT+HTTPPARA","=CID","1");
-      sprintf(URL, "%s?value1=%s",SECRET_IFTTT_HB_URL,buf);
-      err = sendATCmd("AT+HTTPPARA","=URL",URL);
-      delay(200);
-      err = sendATCmd("AT+HTTPACTION","=0","");
-      err = sendATCmd("AT+HTTPTERM","","");         
-    #endif  
-    
-  #endif         //alarmMode  
-  #endif         //iFtttMode
+      } while (i < postTries && err != 0);
+      err = sendATCmd("AT+HTTPTERM","",""); 
+    #endif
+
+    if(i<postTries){ 
+      return 0;
+    }
+    #endif //dweetMode  
+  return retn;
 }
 
 //*********************************
@@ -1160,7 +1380,7 @@ int processAlerts(uint8_t i) {         // set flag to post alert to iFTTT if tem
                                        
   int flag=0;                          //indicate no alerts
 
-  #ifdef alarmMode  
+  #ifdef alertMode  
     #ifdef printMode
       Serial.print(F("*processAlerts*")); Serial.print (i); Serial.print(F(": "));
         Serial.print(" Thresh: " + String(tempLowThresh[i]));
@@ -1304,7 +1524,7 @@ h2o:
     #ifdef printMode
       Serial.println(F(" "));
      #endif  
-  #endif  //alarmMode
+  #endif  //alertMode
   
   return(flag);
 }
@@ -1528,7 +1748,7 @@ int sendATCmd(char ATCode[], char parm1[], char parm2[]){  //220622
   *parm1, parm 2 = parameters as defined in SimComm AT Command manual
    */
   #ifdef printMode
-    Serial.println(F("*sendATCmd*******************************"));
+    Serial.println(F("*sendATCmd*___________________"));
   #endif
   
   //1. construct command from ATCode,parms
@@ -1579,7 +1799,7 @@ checkFona_:                          //I know, I know, bad form.. fix it later
         }
       #endif
       
-      //3b. Return -1 if OK not in response, else return  if HTTPACTION and ,200, found
+      //3b. Return -1 if 'OK' is not in response, else return 0 if HTTPACTION and ,200, found
       char * pch;
       pch = strstr (resp,"OK");
       if (pch) {
@@ -1728,6 +1948,7 @@ int setupSimModule() {
     Serial.println(F("fonaSS.begin(115200, SERIAL_8N1, pinFONA_TX, pinFONA_RX)"));
     Serial.println(F("fonaSS.println('AT+IPR=9600')"));    
   #endif
+  
   #ifdef BOTLETICS
     fonaSS.begin(115200, SERIAL_8N1, pinFONA_TX, pinFONA_RX); // baud rate, protocol, ESP32 RX pin, ESP32 TX pin
     //if (testMode==1) {Serial.println(F("Configuring to 9600 baud"));}
@@ -1738,8 +1959,8 @@ int setupSimModule() {
     Serial.println(F("fonaSS.begin(9600, SERIAL_8N1, pinFONA_TX, pinFONA_RX)"));
     Serial.println(F("fona.begin(fonaSS)"));
   #endif  
+  
   fonaSS.begin(UART_BAUD, SERIAL_8N1, pinFONA_TX, pinFONA_RX); // Switch to 9600
-  //if (testMode==1) {Serial.print(F("Seeking FONA"));}
   if (! fona.begin(fonaSS)) {
     #ifdef printMode
       Serial.println(F("Couldn't find FONA"));
