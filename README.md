@@ -24,12 +24,15 @@ and an optional **OLED** display.
 
 ## Tested With
 
--   **Botletics** `SIM7000A` cellular modem Arduino shield
+-   **Botletics** `SIM7000A` cellular modem Arduino shield 
+    https://github.com/botletics/SIM7000-LTE-Shield/wiki
 
 -   **LiLLYGO** `SIM7000G` board with 
     integrated **ESP32** Wrover
+    http://www.lilygo.cn/prod_view.aspx?TypeId=50033&Id=1246&FId=t3:50033:3
 
--   **Global** `SIM7000A` module
+-   **and-global** `SIM7000A` module
+    https://www.and-global.com/
 
 <br>
 <br>
@@ -43,9 +46,9 @@ sensor data using the listed protocols.
    as a server which can be polled by the 
    hub using a **GET** command.
 
--   `ESP-Now` a lighter footprint protocol by 
-    which the sensors push the data to the 
-    hub based on its MAC address.
+-  `ESP-Now` a lighter footprint protocol by 
+   which the sensors push the data to the 
+   hub based on its MAC address.
 
 <br>
 <br>
@@ -58,7 +61,7 @@ platform to the listed website services.
 
 ### Supported Services
 
--    'io.Adafruit.com' MQTT for graphic display and redundant IFTTT webhook route
+-    'io.Adafruit.com' MQTT for dashboard and redundant IFTTT webhook route
 
 -   `IFTTT.com` for notifying to up to 20 email accounts plus Google sheets
 
@@ -69,6 +72,7 @@ platform to the listed website services.
 ### Planned
 
 - **Google Sheets** directly without **IFTTT**
+    Anyone know how to do this?
 
 - **ThingsBoard**
 
