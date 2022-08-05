@@ -111,5 +111,5 @@ immediate alerts should a sensor exceed a predetermined threshold.
 
 [Badge License]: https://img.shields.io/badge/License-Unknown-808080.svg?style=for-the-badge
 
-[License]: #
+[License]: 5
 
