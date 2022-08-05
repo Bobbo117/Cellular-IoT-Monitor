@@ -6,14 +6,15 @@
 
 ## How It Works
 
-An inexpensive IoT SIM card along with commonly available components gain access to the cloud via a cellular connection.
+An inexpensive IoT SIM card gains access to the cloud via a cellular connection.
 
 The HUB can operate as a stand-alone unit with its own sensors.
 
 Alternatively, the HUB can collect data wirelessly from up to three separate local sensor platforms.
 
-The hub software - **AmbientHUB** - and the sensor software - **AmbientAP** - are written in C++ with the 
-help of the **Arduino IDE**.
+The hub software - **AmbientHUB** - and 
+the sensor software - **AmbientAP** - 
+are written in C++ with the using the **Arduino IDE**.
 
 The **AmbientHUB** software controls an **ESP32**
 micro-controller connected with onboard sensors 
@@ -49,6 +50,7 @@ sensor data using the listed protocols.
 -  `ESP-Now` a lighter footprint protocol by 
    which the sensors push the data to the 
    hub based on its MAC address.
+   https://www.espressif.com/en/products/software/esp-now/resources
 
 <br>
 <br>
@@ -61,11 +63,11 @@ platform to the listed website services.
 
 ### Supported Services
 
--    'io.Adafruit.com' MQTT for dashboard and redundant IFTTT webhook route
+-    https://io.adafruit.com/ MQTT for dashboard and redundant IFTTT webhook route
 
--   `IFTTT.com` for notifying to up to 20 email accounts plus Google sheets
+-    https://ifttt.com/explore for notifying to up to 20 email accounts plus Google sheets
 
--   `Dweet.io` which simply saves the messages in scratchpad format
+-    https://dweet.io/ which simply saves the messages in scratchpad format
 
 <br>
 
@@ -89,10 +91,11 @@ immediate alerts should a sensor exceed a predetermined threshold.
 ### Builtin Modules
 
 -   An ESP32 or a D1 Mini 8266 micro-controller
+    https://www.amazon.com/MELIFE-Development-Dual-Mode-Microcontroller-Integrated/dp/B07Q576VWZ?th=1
 
 -   A `BME-280`, an MCP9808, or a `DHTxx` temperature / humidity sensor
 
--   An optional `SSD1306` OLED display over the **I2C** bus
+-   An optional `SSD1306` OLED display 
 
 <br>
 
