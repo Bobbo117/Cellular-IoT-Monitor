@@ -110,7 +110,7 @@ immediate alerts when sensors cross adaptive thresholds.
 ### Added July 2022
 
 -   door / window sensors
-    https://www.amazon.de/-/en/Sensor-Moisture-Splash-Arduino-Raspberry/dp/B01MRIBI2M
+    https://www.amazon.com/dp/B09BJLRK4S/
 
 -   illumination sensors
     https://www.amazon.com/eBoot-Photoresistor-Sensitive-Resistor-Dependent/dp/B01N7V536K/
