@@ -1,4 +1,4 @@
-# Cellular IoT Monitor   [![License]]
+# Cellular IoT Monitor  
 
 *Transmit sensor data in remote locations without internet.*
 
