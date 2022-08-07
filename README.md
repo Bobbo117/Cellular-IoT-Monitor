@@ -1,4 +1,4 @@
-&# Cellular IoT Monitor   [![Badge License]][License]
+# Cellular IoT Monitor   [![Badge License]][License]
 
 *Transmit sensor data in remote locations without internet.*
 
@@ -65,7 +65,7 @@ platform to the listed website services.
 
 -    https://io.adafruit.com/ MQTT for dashboard and redundant IFTTT webhook route
 
--    https://ifttt.com/explore for notifying to up to 20 email accounts plus Google sheets
+-    https://ifttt.com/ for notifying to up to 20 email accounts plus Google sheets
 
 -    https://dweet.io/ which simply saves the messages in scratchpad format
 
@@ -78,13 +78,19 @@ platform to the listed website services.
 
 - **ThingsBoard**
 
+- **Motion detection**
+
+- Remote **soil** sensing/**lawn sprinkler** control
+ 
+- Smart **camera**
+
 <br>
 <br>
 
 ## Threshold Alert
 
 The **AmbientHUB** software can be configured to provide <br>
-immediate alerts should a sensor exceed a predetermined threshold.
+immediate alerts when sensors cross adaptive thresholds.
 
 <br>
 
@@ -97,15 +103,20 @@ immediate alerts should a sensor exceed a predetermined threshold.
 
 -   An optional `SSD1306` OLED display 
 
+    https://www.amazon.com/gp/product/B07W1PT6VK
+
 <br>
 
 ### Added July 2022
 
 -   door / window sensors
+    https://www.amazon.de/-/en/Sensor-Moisture-Splash-Arduino-Raspberry/dp/B01MRIBI2M
 
 -   illumination sensors
+    https://www.amazon.com/eBoot-Photoresistor-Sensitive-Resistor-Dependent/dp/B01N7V536K/
 
 -   flood sensors
+    https://www.amazon.de/-/en/Sensor-Moisture-Splash-Arduino-Raspberry/dp/B01MRIBI2M
 
 <br>
 
