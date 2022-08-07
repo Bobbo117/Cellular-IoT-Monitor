@@ -1,4 +1,4 @@
-# Cellular IoT Monitor   [![Badge License]][MIT]
+# Cellular IoT Monitor   [![License:MIT]][MIT]
 
 *Transmit sensor data in remote locations without internet.*
 
