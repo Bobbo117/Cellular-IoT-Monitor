@@ -105,10 +105,6 @@ immediate alerts when sensors cross adaptive thresholds.
 
     https://www.amazon.com/gp/product/B07W1PT6VK
 
-<br>
-
-### Added July 2022
-
 -   door / window sensors
     https://www.amazon.com/dp/B09BJLRK4S/
 
@@ -117,6 +113,9 @@ immediate alerts when sensors cross adaptive thresholds.
 
 -   flood sensors
     https://www.amazon.de/-/en/Sensor-Moisture-Splash-Arduino-Raspberry/dp/B01MRIBI2M
+    
+-   PIR/ motion Sensors
+    https://www.amazon.com/DIYmall-HC-SR501-Motion-Infrared-Arduino/dp/B012ZZ4LPM
 
 <br>
 
