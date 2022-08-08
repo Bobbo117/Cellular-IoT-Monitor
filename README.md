@@ -78,8 +78,6 @@ platform to the listed website services.
 
 - **ThingsBoard**
 
-- **Motion detection**
-
 - Remote **soil** sensing/**lawn sprinkler** control
  
 - Smart **camera**
@@ -89,7 +87,7 @@ platform to the listed website services.
 
 ## Threshold Alert
 
-The **AmbientHUB** software can be configured to provide <br>
+The **AmbientHUB** software provides <br>
 immediate alerts when sensors cross adaptive thresholds.
 
 <br>
