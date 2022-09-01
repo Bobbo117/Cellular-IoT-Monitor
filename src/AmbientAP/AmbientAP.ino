@@ -1,5 +1,6 @@
 
-const char* VERSION = "AmbientAP 2022 v7.19";
+const char* APP = "AmbientAP ";
+const char* VERSION = "2022 v8.31";
 
 /*////////////////////////////////////////////////////////////////////////////////////
 
@@ -71,8 +72,7 @@ NOTES -  1. IF using MELife for ESP32 ESP-32S Development Board, use Arduino IDE
   //*****************
   // 1. Operatiing Modes
   //*****************
-  #define printMode           //option: comment out if no printout to Serial monitor
-  
+  #define printMode           //option: comment out if no printout to Serial monitor 
   #define OLED_               //option: comment out if no oled display 128x64
   //#define oledFormat1       // displays only temp humidity pressure on OLED display
   #define oledFormat2         // displays all sensors on OLED display
@@ -102,7 +102,8 @@ NOTES -  1. IF using MELife for ESP32 ESP-32S Development Board, use Arduino IDE
   // 4. Select one platform temperature sensor:
   //****************
   //#define BME_          // BME280
-  #define DHT_            // DHT11,21,22, etc.
+  //#define DHT_            // DHT11,21,22, etc.
+  #define SHT20_        // DFRobot SHT20
   
   //*****************
   // 5. Select one of the 3 following protocols for communication between HUB and sensor platforms; 
@@ -133,7 +134,7 @@ NOTES -  1. IF using MELife for ESP32 ESP-32S Development Board, use Arduino IDE
   //*****************
   int espNowAttempts=0;            //number of ESPNOW transmission attempts so far (do not adjust)
   #define espNowAttemptsAllowed 3  //number of unsuccessful attempts allowed before sleeping if sleepSeconds > 0
-  int espNowDelay = 10000;         //delay in msec between espnow attempts
+  int espNowDelay = 1000;         //delay in msec between espnow attempts
 
   //*****************
   // 7. ESP32 PIN DEFINITIONS
@@ -149,11 +150,12 @@ NOTES -  1. IF using MELife for ESP32 ESP-32S Development Board, use Arduino IDE
   //*****************
   #ifdef ESP32
     #define pinBoardLED 2               //onboard LED
+    #define pinPir 39                   //HC-SR501 PIR sensor                
     #define pinDoor 35                  //door wired to magnetic reed switch, NO & C connected 
                                         //  to pinDoor and ground; 100K pullup R to pinDoor & 3.3v
                                         //  pinDoor = 1 = closed, 0 = open.
                                         //NOTE if this pin is changed, 
-                                        //  change setupInteruptConditions as well.
+                                        //  change setupWakeupConditions as well.
     #define pinDh2o 18                 //digital moisture digital indicater *                         
     #define pinAh2o 36                 //analog moisture analog measure *
                                         //   * Hiletgo LM393 FC37 moisture monitor
@@ -176,7 +178,7 @@ NOTES -  1. IF using MELife for ESP32 ESP-32S Development Board, use Arduino IDE
   #endif
 
   //*****************
-  // 9. Sensor Libraries
+  // 9. Temp Sensor Libraries
   //*****************
   #ifdef DHT_
     #include <Adafruit_Sensor.h>
@@ -191,7 +193,10 @@ NOTES -  1. IF using MELife for ESP32 ESP-32S Development Board, use Arduino IDE
     #include <Adafruit_BME280.h>    // library for BME280 temp hum pressure sensor
     Adafruit_BME280 bme;            // I2C
   #endif
-
+  #ifdef SHT20_  
+    #include "DFRobot_SHT20.h"
+    DFRobot_SHT20 sht20(&Wire, SHT20_I2C_ADDR);
+  #endif    
   //*****************
   //  10. Each sensor board needs unique display title and ssid; 
   //  uncomment one triplet and comment // the others:
@@ -208,11 +213,20 @@ NOTES -  1. IF using MELife for ESP32 ESP-32S Development Board, use Arduino IDE
   //#define displayTitle " ~AMBIENT 3~"
   //const char* ssid = "AMBIENT_3";
 
+  //*****************
+  //  11. sensor inventory for each platform
+  //*****************
+  // arrays to indicate types of sensors aboard each sensor platform (1=presnt, 0 = absent)
+  // HUB  id=0; boards are 1,2,3.. example: temps[]={1,0,1,0} indicates hub and sensor #2 have temp sensors, sensor #1 and #3 do not.
+  uint8_t temps[] = {1,1,1,1}, hums[]={1,1,1,1}, dbms[]={1,0,0,0}, press[]={0,0,0,0}, bat[]={1,0,0,0};
+  uint8_t luxs[] = {1,1,1,1}, h2os[] = {0,1,1,0},doors[]={1,0,1,3},pirs[]={1,0,1,0};
+
 ////////////////////////////////////////////////////////////////////////////
 //*********            End of Compile-time Options           ***************
 ////////////////////////////////////////////////////////////////////////////
 
   uint64_t uS_TO_S_FACTOR = 1000000;  // Conversion factor for micro seconds to seconds
+  uint8_t wakeupID;                   //reason sensor wode up; see readWakeupID 
 
   //*****************
   // Platform sensor structure
@@ -226,16 +240,17 @@ NOTES -  1. IF using MELife for ESP32 ESP-32S Development Board, use Arduino IDE
       uint8_t lux;             // 0-99 % of full illumination
       uint8_t aH2o;            // 0-99 % of full sensor level detection
       uint8_t dH2o;            // 0 or 1 digital readout 0=dry  (normal state)
-      uint8_t door;            // 0 or 1 door open or closed. door = 0 when closed (normal state)
+      uint8_t door;            // # times door opened and closed after previous report. Even # or 0 means door currently closed
+      uint8_t pir;             // # times pir detected motion after previous report
   } platforms;
   
   #ifdef ESP32  //store the reaadings persistently if esp32
-    RTC_DATA_ATTR platforms sensorData ={sensorID,0,0,0,0,0,0,0};     
+    RTC_DATA_ATTR platforms sensorData ={sensorID,0,0,0,0,0,0,0,0};     
   #endif
   #ifdef ESP8266
-    platforms sensorData = {sensorID,0,0,0,0,0,0,0};   to initialize  
+    platforms sensorData = {sensorID,0,0,0,0,0,0,0,0};   to initialize  
   #endif  
-
+  RTC_DATA_ATTR uint8_t priorDoor = 77; //last door status = 0 (closed) or 1 (open)
   String hum="--",temp="--",pres="--"; //adjusted values sent to hub if wifi used: "--" if nan or current reading if valid
   //String payload ="11,22,3333,4,55,66,77,----"; future plan
 
@@ -297,41 +312,61 @@ NOTES -  1. IF using MELife for ESP32 ESP-32S Development Board, use Arduino IDE
     esp_now_peer_info_t peerInfo;
   #endif
 
+  /************************************
+  void IRAM_ATTR doorChangeInterrupt() {  //disabled can poll door fast in loop
+    //door callback function counts door changes
+    sensorData.door ++; 
+    #ifdef printMode
+      Serial.println(F("*doorChangeInterrupt*"));
+      printSensorData();
+    #endif  
+  }
+  */
+  /************************************
+  void IRAM_ATTR pirInterrupt() {  //disabled due to excessive false interrupts
+    //PIR callback function counts pir changes
+    sensorData.pir ++; //= sensorData + digitalRead(pinPir);
+    #ifdef printMode
+      Serial.println(F("*pirInterrupt*"));
+      printSensorData();
+    #endif  
+  }
+  */
 /////////////////////////////////////
 //*****       Setup()      *********
 ////////////////////////////////////
 void setup(){
-  //Execute one time setup, read and display sensor values, and setup wifi server OR transmit data using ESPNOW.
+  //Read sensors, 1) setup wifi server OR 2) transmit data using ESPNOW and go to sleep in less than 2 sec!
+  delay(200);                   //ESP32 Bug workaround -- don't reference rtc ram too soon!!
   setupPinModes();
-  #ifdef printMode              //print the following to status monitor if printMode defined:
-    Serial.begin(115200);
-    turnOnBoardLED();           //turn on board LED during setup
-    Serial.println(F(""));delay (5000);  //allow time for user to switch to status monitor after compilation
-    Serial.print(F(VERSION));Serial.print(F(" - ")); Serial.println(F(displayTitle));
-    Serial.println(F("----------------------------")); 
-    printWakeupReason();
-    printSensorData();
-  #endif
-  restartIfTime();              //restart ea 24 hrs  
-  readDoor();                   //read door status
+  wakeupID = readWakeupID();    //process wakeup sources & return wakeup indicator
+  setupOledDisplay();           //prepare the oled display if #define includeOled is enabled
+  displayVersion();             //display version and blink onboard led 5 sec on bootCount=0
+  turnOnBoardLED(); 
+  serialPrintVersion();         //Show startup info to serial monitor if printMode enabled
+  restartIfTime();              //restart ea 24 hrs and reset bootcount=0 else increment bootCount 
+  //attachInterrupt(digitalPinToInterrupt(pinPir), pirInterrupt, RISING);  //in case you want to try it!
+  //attachInterrupt(digitalPinToInterrupt(pinDoor), doorChangeInterrupt, CHANGE); //in case you want to try it!
+  setupSensors();               //initialize sensors 
+  readDoor();                   //read door status. NOTE door is wakeup trigger, also polled during loop
+  //readPir();                  //read pir status. NOTE pir is wakeup trigger; updated during readWakeupID
   readAh2o();                   //read analog flood level value
   readDh2o();                   //read digital flood indicater
   readPhotoCell();              //read photocell value
-  setupSensors();               //initialize sensors (can delay 2-4 seconds for sensor ready)
   readTemperature();            //valid data updates temperature and temp; invalid updates only temp with  "--"
   readHumidity();               //valid data updates humidity and hum; invalid updates only hum with  "--"
   readPressure();               //valid data updates pressure and pres; invalid updates only pres with  "--"              
-  setupOledDisplay();           //prepare the oled display if #define includeOled is enabled
+  printSensorData();
   displayStatus();              //display latest valid sensor readings on oled display if #define incledeOled is enabled
-  setupWifiServer();            //initialize wifi server if #define WIFI is enabled
   
   setupESPNOW_1to1();           //format data and send espnow msg to a single peer if #define ESPNOW_1to1 is enabled; 
                                 //successful data transfer will cause the system to sleep if sleepSeconds > 0
  
   setupESPNOW_1toN();           //format data and send espnow msg to multiple peers if #define ESPNOW_1toN is enabled; 
                                 //will NOT cause system to go to sleep if sleepSeconds>0 and data was received successfully
-  printSensorData();
-  
+
+  setupWifiServer();            //initialize wifi server if #define WIFI is enabled
+
   turnOffBoardLED();            //turn off the board LED when setup complete
 }
 
@@ -340,32 +375,48 @@ void setup(){
 /////////////////////////////////
 void loop(){ 
   //Execute repeatedly if system did not go to sleep during setup
-  if (sleepSeconds == 0){      //if unit does not sleep, read all sensors if chillSeconds has elapsed since last reading                              
-    if(chillTimeIsUp(chillSeconds*1000)==1){   //slow down loop for serial monitor readability + sensor R&R   
-      readDoor();
-      readAh2o();
-      readDh2o();
-      readPhotoCell();       
+  if(chillTimeIsUp(chillSeconds*1000)==1){   //slow down loop for serial monitor readability + sensor R&R   
+    readDoor();
+    //readPir();                //read pir status via wakeup rather than polling
+    readAh2o();
+    readDh2o();
+    readPhotoCell();       
+  
+    if (sleepSeconds == 0){      //if unit does not sleep, read all sensors if chillSeconds has elapsed since last reading                              
       readTemperature();      //valid data updates temperature and temp; invalid updates only temp with  "--"
       readHumidity();         //valid data updates humidity and hum; invalid updates only hum with  "--"
       readPressure();         //valid data updates pressure and pres; invalid updates only pres with  "--"                 
       displayStatus();        //display latest vald sensor readings on oled display if #define incledeOled is enabled
-    }   
-  }else{                  
-    //Set interrupt conditions and go to sleep if it is nap time
-    if (sensorNapTime(awakeSeconds*1000) ==1 ){        //determine if awakeSeconds have elapsed
-      setupInterruptConditions();  //interrupt if door state changes
-      #ifdef printMode        //issue sleep message if #define printMode is enabled
-        Serial.println(F(" "));Serial.print(F("sleeping "));Serial.print(sleepSeconds);Serial.println(F(" seconds..zzzz"));
-      #endif 
-      ESP.deepSleep(sleepSeconds * uS_TO_S_FACTOR);   //go to sleep for sleepSeconds 
+    }else{ 
+                       
+      //Set wakeup conditions and go to sleep if it is nap time
+      if (sensorNapTime(awakeSeconds*1000) ==1 ){        //determine if awakeSeconds have elapsed
+        setupWakeupConditions();  //interrupt if door or PIR state changes
+        #ifdef printMode        //issue sleep message if #define printMode is enabled
+          Serial.println(F(" "));Serial.print(F("sleeping "));Serial.print(sleepSeconds);Serial.println(F(" seconds..zzzz"));
+        #endif 
+        ESP.deepSleep(sleepSeconds * uS_TO_S_FACTOR);   //go to sleep for sleepSeconds 
+      }
     }
-  }
+  }  
   sendEspNow_1to1();          //format data and send espnow msg to a single peer if #define ESPNOW_1to1 is enabled; 
                               //successful data transfer will cause the system to sleep if sleepSeconds > 0                                
 
   sendEspNow_1toN();          //format data and send espnow msg to multiple peers if #define ESPNOW_1toN is enabled; 
 }                             //repeat at top of the loop
+
+//*********************************
+void blinkBoardLED(int sec){      // Blink board LED for sec seconds at .5 second intervals
+  #ifdef printMode 
+    Serial.println(F("*blinkBoardLED*"));
+  #endif  
+  for (int i=0;i<sec;i++){
+     turnOnBoardLED();            // Turn on boaard LED .5 seconds
+     delay(500);
+     turnOffBoardLED();           // Turn off boaard LED .5 seconds
+     delay(500);
+  }
+}
 
 //*********************************
 static int chillTimeIsUp(long msec){    
@@ -398,66 +449,102 @@ void displayStatus(){
     #endif
     #ifdef oledFormat2 
       int iTemperature=sensorData.temperature + .5;
-      if(temp=="--"){
-        oled.print ("?");
-      }
       oled.print(iTemperature);
       #ifdef printMode
-        Serial.print("temp, Temperature: ");Serial.print(temp);Serial.print(", ");Serial.print(iTemperature);Serial.println(" *F");
-      #endif  
-      oled.print(" F   ");
+        Serial.print(" temp, Temperature: ");Serial.print(temp);Serial.print(", ");Serial.print(iTemperature);Serial.println(" *F");
+      #endif 
+      if(temp=="--"){
+        oled.print (" F?   ");
+      }else{ 
+      oled.print(" F    ");
+      }
       
       int iHumidity=sensorData.humidity +.5;
+      oled.print(iHumidity);
       if(hum=="--"){
         oled.print ("?");
+      }else{
+        oled.println("%");
       }
-      oled.print(iHumidity);oled.println("%");
       #ifdef printMode
-        Serial.print("hum, Humidity: ");Serial.print(hum);Serial.print(F(", "));Serial.print(iHumidity);Serial.println(F("%"));
-      #endif  
-    
-      oled.print ("LIGHT  ");
-      #ifdef printMode
-         Serial.print("lux: ");Serial.println(sensorData.lux);
+        Serial.print(" hum, Humidity: ");Serial.print(hum);Serial.print(F(", "));Serial.print(iHumidity);Serial.println(F("%"));
       #endif  
 
-      float x=sensorData.lux;
-      if (x>99) {x = 99;}    //limit to 99%
-      dtostrf(x,1,0,buf1);
-      if ( x<10){ 
-        strcpy(buf0,"0");strcat(buf0,buf1);strcpy(buf1,buf0);
-      }
-      oled.print(buf1);
-      oled.println("%");
+      if(luxs[sensorID]==1){
+        oled.print ("LIGHT   ");
+        #ifdef printMode
+           Serial.print(" lux: ");Serial.println(sensorData.lux);
+        #endif  
+        oled.print(sensorData.lux);
+        oled.println("%");
+      }  
     
-       // oled.print("FLOOR ");
-      if(sensorData.aH2o - h2oThreshhold > 0){  //display leak status in real time
-        oled.print("WET    ");
-        #ifdef printMode
-          Serial.println(" FLOOR aH2o WET");
-        #endif  
-      }else{
-        oled.print("DRY    ");
-        #ifdef printMode
-          Serial.println(" FLOOR aH2o DRY");
-        #endif  
+      if(h2os[sensorID]==1){
+        if(sensorData.aH2o - h2oThreshhold > 0){  //display leak status in real time
+          oled.print("WET ");
+          #ifdef printMode
+            Serial.println(" FLOOR aH2o WET");
+          #endif  
+        }else{
+          oled.print("DRY ");
+          #ifdef printMode
+            Serial.println(" FLOOR aH2o DRY");
+          #endif  
+        }
       }
-
-      //oled.print("DOOR ");
-      if(sensorData.door==0){
-        oled.println("SHUT");
-        #ifdef printMode
-          Serial.println(" DOOR SHUT");
-        #endif  
-      }else{
-        oled.println("OPEN");
-        #ifdef printMode
-          Serial.println(" DOOR OPEN");
-        #endif  
+      
+      if(pirs[sensorID]==1){
+          oled.print("m");
+          oled.print(sensorData.pir);
+          #ifdef printMode
+            Serial.print(" MOTION = "); Serial.println(sensorData.pir);
+          #endif  
+      }
+      
+      if(doors[sensorID]==1){
+        if(digitalRead(pinDoor)==1) {
+          oled.print(" SH");
+          #ifdef printMode
+            Serial.println(" DOOR SHUT");
+          #endif  
+        }else{
+          oled.print(" OP");
+          #ifdef printMode
+            Serial.println(" DOOR OPEN");
+          #endif  
+        }
+        oled.println(sensorData.door);
       }
     #endif  
   #endif    //OLED_
 }
+
+//*********************************
+static int displayTimeIsUp(long msec){    //Read data at timed intervals  
+  static unsigned long previousMillis = 0;   
+  unsigned long currentMillis = millis();
+  if (currentMillis - previousMillis >= msec) {
+    previousMillis = currentMillis; 
+    return(1);
+  }else{
+    return(0);
+  }
+} 
+
+//*********************************
+void displayVersion(){  
+  //display version and blink onboard led 5 sec
+  if (bootCount ==0) {
+    #ifdef OLED_
+      //char buf0[6],buf1[6];
+      oled.clear(); 
+      //oled.setFont(fixed_bold10x15);
+      oled.setFont(Arial_14);
+      oled.println(VERSION);      
+    #endif
+    blinkBoardLED(5);    // blink LED for 5 sec for feedback and to give user time to activate serial console   
+  }
+}  
 
 //*********************************
 //***ESP NOW One to One Callback function***************  
@@ -465,25 +552,31 @@ void displayStatus(){
   void ESPNOW_1to1_OnDataSent(const uint8_t *mac_addr, esp_now_send_status_t status) {
     //callback verifies successful receipt after message was sent (see loop below for sendEspNow_1to1 function)
     #ifdef printMode
-      Serial.println(F("*OnDataSent*"));
-      Serial.print(F("\r\nLast Packet Send Status:\t"));
-      Serial.println(status == ESP_NOW_SEND_SUCCESS ? "Delivery Success" : "Delivery Fail");
+      Serial.print(F("*ESPNOW_1to1_OnDataSent* "));
+      //Serial.print(F("\r\nLast Packet Send Status:\t"));
+      Serial.print(F("Last Packet Send Status: "));
+      Serial.println(status == ESP_NOW_SEND_SUCCESS ? " Delivery Success" : " Delivery Fail");
     #endif
     if(status==0){
       if(sleepSeconds==0){
       }else{
-        setupInterruptConditions();  //interrupt if door state changes
+        sensorData.door = 0;
+        priorDoor = 0;
+        sensorData.pir = 0;   
+        displayStatus();     
+        setupWakeupConditions();
         #ifdef printMode
-          Serial.println(F(" "));Serial.print(F("sleeping "));Serial.print(sleepSeconds);Serial.println(F(" seconds..zzzz"));
-        #endif  
+          Serial.print(F(" sleeping "));Serial.print(sleepSeconds);Serial.println(F(" seconds..zzzz"));
+        #endif 
+        displayStatus;
         ESP.deepSleep(sleepSeconds * uS_TO_S_FACTOR);
       }  
     }else{
       espNowAttempts++;
       if (espNowAttempts >= espNowAttemptsAllowed){ 
-        setupInterruptConditions();  //interrupt if door state changes
+        setupWakeupConditions();  //interrupt if door state changes
         #ifdef printMode
-          Serial.println(F(" "));Serial.print(F("sleeping "));Serial.print(sleepSeconds);Serial.println(F(" seconds..zzzz"));
+          Serial.print(F(" sleeping "));Serial.print(sleepSeconds);Serial.println(F(" seconds..zzzz"));
         #endif  
         ESP.deepSleep(sleepSeconds * uS_TO_S_FACTOR);        
       }
@@ -586,6 +679,7 @@ String getPressure() {
 void printSensorData(){
   #ifdef printMode  
     Serial.println(F("*printSensorData*"));
+    Serial.print(F(" "));
     Serial.print(sensorData.id);Serial.print(F(" id "));
     Serial.print(sensorData.temperature);Serial.print(F(" F "));
     Serial.print(sensorData.humidity);Serial.print(F(" % "));
@@ -593,74 +687,75 @@ void printSensorData(){
     Serial.print(sensorData.lux);Serial.print(F(" lux "));
     Serial.print(sensorData.aH2o);Serial.print(F(" aH2o "));
     Serial.print(sensorData.dH2o);Serial.print(F(" dh2o "));
-    Serial.print(sensorData.door);Serial.println(F(" door "));
+    Serial.print(sensorData.door);Serial.print(F(" door "));
+    Serial.print(sensorData.pir);Serial.println(F(" motion "));
   #endif  
 }
 
 //********************************
-void printWakeupReason(){
-  #ifdef printMode  //print_wakeup_reason()
-    Serial.println(F("*printWakeupReason*"));
-    esp_sleep_wakeup_cause_t wakeup_reason;
-    wakeup_reason = esp_sleep_get_wakeup_cause();
-    switch(wakeup_reason){
-      case ESP_SLEEP_WAKEUP_EXT0 : Serial.println(F("Wakeup caused by external signal using RTC_IO")); break;
-      case ESP_SLEEP_WAKEUP_EXT1 : Serial.println(F("Wakeup caused by external signal using RTC_CNTL")); break;
-      case ESP_SLEEP_WAKEUP_TIMER : Serial.println(F("Wakeup caused by timer")); break;
-      case ESP_SLEEP_WAKEUP_TOUCHPAD : Serial.println(F("Wakeup caused by touchpad")); break;
-      case ESP_SLEEP_WAKEUP_ULP : Serial.println(F("Wakeup caused by ULP program")); break;
-      default : Serial.printf("Wakeup was not caused by deep sleep: %d\n",wakeup_reason); break;
+void printWakeupID(uint8_t wakeupID){
+  #ifdef printMode 
+    Serial.print(F("*printWakeupID* ---> ")); 
+    switch(wakeupID){
+      case 0 : Serial.println(F("RTC_IO = door")); break;
+      case 1 : Serial.println(F("RTC_CNTL = PIR")); break;
+      case 2 : Serial.println(F("timer")); break;
+      case 3 : Serial.println(F("touchpad")); break;
+      case 4 : Serial.println(F("ULP program")); break;
+      default : Serial.println(F("default = restart")); break;
     }
-  #endif 
+  #endif    
 }
 
 //***********************************
 void readAh2o(){
   //Read analog value and convert to % as whole number 0-99
   #ifdef printMode
-    Serial.println(F("*readAh2o*"));
+    Serial.print(F("*readAh2o* "));
   #endif  
-//  turnOnBoardLED(); 
-  sensorData.aH2o = 2.44*(4095-analogRead(pinAh2o))/100;   //whole number 1-99 %
+  if(h2os[sensorID]==1){
+    sensorData.aH2o = 2.44*(4095-analogRead(pinAh2o))/100;   //whole number 1-99 %
+  }  
   #ifdef printMode
-    Serial.print("aH2o: ");Serial.print(sensorData.aH2o);Serial.println(F("% "));
+    Serial.print(sensorData.aH2o);Serial.println(F("% "));
   #endif
-//  turnOffBoardLED();
 }
 
 //***********************************
 void readDh2o(){
   #ifdef printMode
-    Serial.println(F("*readDh2o*"));
+    Serial.print(F("*readDh2o* "));
   #endif  
-  //sensor reads 1 when dry, 0 when wet
-  //we want 0=dry (normal status)
-  sensorData.dH2o = digitalRead(pinDh2o);
-  if (sensorData.dH2o >0){
-    sensorData.dH2o = 0;
-  }else{ 
-    sensorData.dH2o = 1; 
-  }
+  if(h2os[sensorID]==1){
+    //sensor reads 1 when dry, 0 when wet
+    //we want 0=dry (normal status)
+    sensorData.dH2o = !digitalRead(pinDh2o);
+  }  
   #ifdef printMode
-    Serial.print("dH2o: ");Serial.println(sensorData.dH2o);
+    Serial.println(sensorData.dH2o);
   #endif  
 }
 
 //***********************************
 void readDoor(){
   #ifdef printMode
-    Serial.println(F("*readDoor*"));
+    Serial.print(F("*readDoor*"));Serial.print(F(" pinDoor: "));Serial.println(digitalRead(pinDoor));  
   #endif
-  //door = 1 when closed, 0 when open due to pullup resister
-  //we want door = 0 when closed (normal state):
-  sensorData.door = digitalRead(pinDoor);
-  if (sensorData.door >0){
-    sensorData.door = 0;
-  }else{ 
-    sensorData.door = 1; 
-  }
-  
-  #ifdef printMode
+  if (doors[sensorID]==1){
+    //door = 1 when closed, 0 when open due to pullup resister
+    //we want door = 0 when closed (normal state):
+    if (sensorData.door > 0) {
+      if (priorDoor == !digitalRead(pinDoor)){
+       }else{
+         priorDoor=!digitalRead(pinDoor);
+         sensorData.door ++;
+     }
+   }else{
+     sensorData.door = !digitalRead(pinDoor);
+     priorDoor=sensorData.door;
+   }
+  }  
+  #ifdef testMode
     Serial.print("door: ");Serial.println(sensorData.door);
   #endif
 }
@@ -669,7 +764,7 @@ void readDoor(){
 void readHumidity() {  
   //valid data updates sensorData.humidity and hum; invalid updates only hum with  "--"
   #ifdef printMode
-    Serial.println(F("*readHumidity*"));
+    Serial.print(F("*readHumidity* "));
   #endif  
   float x=0;
   #ifdef DHT_
@@ -677,6 +772,9 @@ void readHumidity() {
   #endif
   #ifdef BME_
     x = (bme.readHumidity());
+  #endif
+  #ifdef SHT20_
+    x = (sht20.readHumidity());  
   #endif
   hum=String(x);
   if (hum == "nan") {hum = "--";
@@ -691,20 +789,38 @@ void readHumidity() {
 void readPhotoCell(){
   //Read analog value and convert to % as whole number 0-99
   #ifdef printMode
-    Serial.println(F("*readPhotoCell*"));
+    Serial.print(F("*readPhotoCell* "));
   #endif  
-  sensorData.lux = 2.44*((4095-analogRead(pinPhotoCell))/100);  //whole number 1-99 %
+  if (luxs[sensorID]==1){
+    sensorData.lux = 2.44*((4095-analogRead(pinPhotoCell))/100);  //whole number 1-99 %
+  }
+  
   #ifdef printMode
-    Serial.print(F("lux: "));Serial.print(sensorData.lux); Serial.print(F("% "));
+    Serial.print(F("lux%, A/D: "));Serial.print(sensorData.lux); Serial.print(F("% "));
     Serial.println(analogRead(pinPhotoCell)); 
   #endif  
+}
+
+//***********************************
+void readPir(){
+  #ifdef printMode
+    Serial.print(F("*readPir* "));
+  #endif
+  if (pirs[sensorID]==1){
+    //pir = 0 when no motion (normal state)
+    sensorData.pir = digitalRead(pinPir) + sensorData.pir ;
+    //pirCount=pirCount+sensorData.pir;    
+  }  
+  #ifdef printMode
+    Serial.println(sensorData.pir);
+  #endif
 }
 
 //***********************************
 void readPressure(){   
   //valid data updates sensorData.pressure and pres; invalid updates only pres with  "--"
   #ifdef printMode
-    Serial.println(F("*readPressure*"));
+    Serial.print(F("*readPressure* "));
   #endif 
   float x = 0; 
   pres="--"; //indicate no reading
@@ -724,7 +840,7 @@ void readPressure(){
 void readTemperature() {  
   //valid data updates sensorData.temperature and temp; invalid updates only temp with  "--"
   #ifdef printMode
-    Serial.println(F("*readTemperature*"));
+    Serial.print(F("*readTemperature* "));
   #endif 
   float x = 0; 
   #ifdef DHT_
@@ -733,13 +849,45 @@ void readTemperature() {
   #ifdef BME_
     x=1.8*bme.readTemperature()+32.0;
   #endif 
+  #ifdef SHT20_
+    x = 1.8*sht20.readTemperature()+32.0;
+  #endif
   temp=String(x);
   if (temp=="nan"){temp = "--";
      }else{sensorData.temperature = x;
   }
+  
   #ifdef printMode 
      Serial.print(F("temperature, temp: "));Serial.print(sensorData.temperature);Serial.print(F(", "));Serial.println(temp);
   #endif    
+}
+
+//*************************************
+uint8_t readWakeupID(){
+  //read wakeup reason and return code
+  #ifdef printMode 
+    Serial.println(F("*readWakupID*"));
+  #endif   
+  esp_sleep_wakeup_cause_t wakeup_reason;
+  wakeup_reason = esp_sleep_get_wakeup_cause();
+  switch(wakeup_reason){
+    case ESP_SLEEP_WAKEUP_EXT0 : 
+       sensorData.door ++ ;//= !digitalRead(pinDoor);
+       priorDoor=!digitalRead(pinDoor);
+       #ifdef printMode 
+         Serial.print(F("priorDoor: "));Serial.println(priorDoor);
+       #endif
+       //printSensorData();
+       return 0;
+    case ESP_SLEEP_WAKEUP_EXT1 :      
+       sensorData.pir ++; //= sensorData.pir + digitalRead(pinPir);
+       //printSensorData();
+       return 1;
+    case ESP_SLEEP_WAKEUP_TIMER : return 2;
+    case ESP_SLEEP_WAKEUP_TOUCHPAD : return 3;
+    case ESP_SLEEP_WAKEUP_ULP : return 4;
+    default : return 5;
+  }    
 }
 
 //***********************************
@@ -758,17 +906,17 @@ void sendEspNow_1to1(){
   //format data and send to single ESPNOW peer if #define espnow_1to1 is enabled
   #ifdef ESPNOW_1to1
     #ifdef printMode
-      Serial.println(F("*sendEspNow1to1*"));
+      Serial.print(F("*sendEspNow1to1* "));
     #endif    // 
     sensorData.id = sensorID;
+    //printSensorData();
 
     esp_err_t espResult = esp_now_send(broadcastAddress, (uint8_t *) &sensorData, sizeof(sensorData)); // Send message via ESP-NOW
     #ifdef printMode
       if (espResult == ESP_OK) { 
-        Serial.println(F("Sent with success"));
-      //Serial.println(status == ESP_NOW_SEND_SUCCESS ? "Delivery Success" : "Delivery Fail");
+        Serial.println(F(" Sent with success"));
       }else{
-        Serial.println(F("Error sending the data"));  
+        Serial.println(F(" Error sending the data"));  
       }
     #endif
     delay(espNowDelay);
@@ -780,15 +928,15 @@ void sendEspNow_1toN(){
   //format data and send to multiple ESPNOW peers if #define espnow_1toN is enabled
   #ifdef ESPNOW_1toN
     #ifdef printMode
-      Serial.println(F("*sendEspNow1toN*"));
+      Serial.print(F("*sendEspNow1toN*"));
     #endif
    esp_err_t espResult = esp_now_send(0, (uint8_t *) &sensorData, sizeof(sensorData)); // Send message via ESP-NOW
     #ifdef printMode 
       if (espResult == ESP_OK) {
-        Serial.println(F("Sent with success"));
+        Serial.println(F( "Sent with success"));
       }
       else {
-        Serial.println(F("Error sending the data"));
+        Serial.println(F(" Error sending the data"));
       }
     #endif
     delay(espNowDelay);
@@ -811,6 +959,20 @@ static int sensorNapTime(long msec){
   }
 } 
 
+//*********************************
+void serialPrintVersion(){      //Show startup info to serial monitor if printMode enabled
+  #ifdef printMode              //print the following to status monitor if printMode defined:
+    Serial.begin(115200);
+    turnOnBoardLED();           //turn on board LED during setup
+    Serial.println(F(""));
+    Serial.print(F("***** "));Serial.print(F(APP)); Serial.print(F(VERSION)); 
+    Serial.println(F(displayTitle));
+    Serial.println(F("----------------------------")); 
+    printWakeupID(wakeupID);
+    printSensorData();        //print test data on first boot, previous data thereafter
+  #endif
+}
+  
 //*********************************
 void setupESPNOW_1to1(){
   //initializes espnow, registers the peer's MAC address, and registers the peer
@@ -913,22 +1075,6 @@ void setupESPNOW_1toN(){
 }
 
 //*********************************
-void setupInterruptConditions(){
-  //set door interupt based on current state open or closed
-  #ifdef printMode
-    Serial.println(F("*setupInterruptConditions*"));
-    Serial.print(F("door = "));Serial.println(sensorData.door);
-  #endif 
-  if(sensorData.door==0){  //processed door = 1 when raw data dooor = 0
-    esp_sleep_enable_ext0_wakeup(GPIO_NUM_35,0); //0 = High OPEN 1 = Low CLOSED
-    //esp_sleep_enable_ext0_wakeup(pinDoor,1); 
-  }else{
-    esp_sleep_enable_ext0_wakeup(GPIO_NUM_35,1);  
-
-  } 
-}      
-
-//*********************************
 void setupOledDisplay(){
   //setup OLED display on I2C bus
   #ifdef printMode
@@ -951,15 +1097,24 @@ void setupPinModes(){
     Serial.println(F("*setupPinModes*"));
   #endif   
   pinMode(pinBoardLED,OUTPUT);
-  pinMode (pinDoor, INPUT);
-  pinMode (pinPhotoCell, INPUT);
-  #ifdef ESP32
-    pinMode (pinAh2o, INPUT);
-    pinMode (pinDh2o, INPUT_PULLUP);
-  #endif
-  #ifdef ESP8266
-    pinMode (pinDh2o, INPUT);
-  #endif  
+  if (doors[sensorID]==1){
+    pinMode (pinDoor, INPUT);
+  }  
+  if (pirs[sensorID]==1){
+    pinMode (pinPir, INPUT);
+  }
+  if (luxs[sensorID]==1){
+    pinMode (pinPhotoCell, INPUT);
+  }  
+  if (h2os[sensorID]==1){  
+    #ifdef ESP32
+      pinMode (pinAh2o, INPUT);
+      pinMode (pinDh2o, INPUT_PULLUP);
+    #endif
+    #ifdef ESP8266
+      pinMode (pinDh2o, INPUT);
+    #endif  
+  }  
 }
 
 //*********************************
@@ -989,7 +1144,40 @@ void setupSensors(){
       #endif  
     } 
   #endif
+  #ifdef SHT20_
+    sht20.initSHT20();
+    delay(100);
+    //Status: End of battery, Heater enabled, Disable OTP reload result: no,no,yes
+    #ifdef testMode
+      sht20.checkSHT20();
+    #endif  
+ #endif   
 }
+
+//*********************************
+void setupWakeupConditions(){
+  //set wakeup conditions based on door & PIR sensor
+  #ifdef printMode
+    Serial.print(F("*setupWakeupConditions*"));
+    Serial.print(F(" door --> "));Serial.print(!digitalRead(pinDoor));
+    Serial.println(F("; pir --> 1"));//Serial.println(sensorData.pir);
+  #endif 
+
+  //Set up door causes wakeup when opened or closeed
+  if(doors[sensorID]==1){
+    if (digitalRead(pinDoor)==1){
+      esp_sleep_enable_ext0_wakeup(GPIO_NUM_35,0); //0 = High OPEN 1 = Low CLOSED
+     }else{
+      esp_sleep_enable_ext0_wakeup(GPIO_NUM_35,1);  
+    } 
+  }  
+
+  //set up pir causes wakeup when movement detected
+  if(pirs[sensorID]==1){
+    #define wakeupBitmask 0x4000000000  //pir gpio 39
+    esp_sleep_enable_ext1_wakeup(wakeupBitmask,ESP_EXT1_WAKEUP_ANY_HIGH);
+  }  
+}      
 
 //*************************************
 void setupWifiServer(){

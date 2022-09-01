@@ -1,5 +1,6 @@
 
-const char* VERSION = "AmbientHUB 2022 v8.04";
+const char* APP = "AmbientHUB ";
+const char* VERSION = "2022 v8.31";
 
 /*////////////////////////////////////////////////////////////////////////////////////
 
@@ -116,7 +117,7 @@ The code within the '#ifdef ESPNOW to #endif compiler directives is adapted from
   #define iFTTTMode                  // enables use of ifttt; // = disable IFTTT
   #define dweetMode                  // enables use of dweet; // = disable dweet
 
-  //#define alertMode                //  enables postAlert when a measurement crosses threshhold; // = no alert
+  //#define alertMode                  //  enables postAlert when a measurement crosses threshhold; // = no alert
   #define cellularMode               //  enables a cellular connection; // = no connection (good for debugging code without racking up cellular costs)
 
   #define OLED_                      // 64x128 pixel OLED display if hub uses one
@@ -124,7 +125,6 @@ The code within the '#ifdef ESPNOW to #endif compiler directives is adapted from
   #define simSleepMode               // shut off sim modem between readings 
   //#define testCellular             // comment out if you dont want to enable test transmission to dweet, ifttt at initial startup
   //#define testMode                 // uncomment for verbose test messages to status monitor 
-
   //#define ATMode                    // uncomment to use AT commands as workarounds to higher level FONA commands improves success rate thru ifttt 
 
   //*****************
@@ -143,7 +143,7 @@ The code within the '#ifdef ESPNOW to #endif compiler directives is adapted from
   // to identify the source especially if you have more then one
   //*****************
   
-  char dataTag[] = "ME";    // <<< unique prefix to identify source of data packet
+  char dataTag[] = "ME";    // <<< unique prefix to identify source of data packet when tracking >1 HUB
 
   //*****************
   // 4. Select one hardware device below and comment out the others: **/
@@ -169,19 +169,20 @@ The code within the '#ifdef ESPNOW to #endif compiler directives is adapted from
   #define BME_        // BME280 temperature, humidity, pressure sensor
   //#define DHT_      // DHT11,21,22, etc. temperature, humidity sensors
   //#define MCP9808_  // botletics shield temperature sensor
-
+  //#define SHT20_    // DFRobot SHT20
+  
   //*****************    
   // 7. Sensor Inventory
   //*****************
   
   #define numberOfPlatforms 4         // number of sensor platforms available (3 max)  + 1 for HUB
                                       // example: if hub has sensors, and there are 3 wireless platforms, numberOfPlatforms = 4
-                                      
+  uint8_t sensorID = 0;               //HUB identifier = 0 see next comment                             
   // arrays to indicate types of sensors aboard each sensor platform (1=presnt, 0 = absent)
-  // HUB  id=0; boards are 1,2,3.. example: temps[]={1,0,1,0} indicates hub and sensor #2 have temp sensors, sensor #1 and #3 do not.
-  uint8_t temps[] = {1,1,1,1}, hums[]={1,1,1,1}, dbms[]={1,0,0,0}, pres[]={1,0,0,0}, bat[]={1,0,0,0};
-  uint8_t luxs[] = {0,1,0,1}, h2os[] = {0,1,0,0},doors[]={0,0,1,1};
-  
+  // HUB  sensorID=0; boards are 1,2,3.. example: temps[]={1,0,1,0} indicates hub and sensor #2 have temp sensors, sensor #1 and #3 do not.
+  uint8_t temps[] = {1,1,1,1}, hums[]={1,1,1,1}, dbms[]={1,0,0,0}, pres[]={0,0,0,0}, bat[]={1,0,0,0};
+  uint8_t luxs[] = {0,1,1,1}, h2os[] = {0,1,1,0},doors[]={0,0,1,1},pirs[]={0,0,1,0};
+
   //*****************
   // 8. platform sensor data structure
   //*****************
@@ -194,12 +195,13 @@ The code within the '#ifdef ESPNOW to #endif compiler directives is adapted from
       uint8_t lux;             // 0-99 % of full illumination
       uint8_t aH2o;            // 0-99 % of full sensor level detection
       uint8_t dH2o;            // 0 or 1 digital readout 1=dry
-      uint8_t door;            // 0 or 1 door open or closed 1=open
+      uint8_t door;            // # times door opened and closed after previous report. Even # or 0 means door is shut
+      uint8_t pir;             // # times pir detected motion after previous report
   } platforms;
   
-  platforms sensorData = {0,0,0,0,0,0,0,0}; // Creates a structure called sensorData to receive data from sensor platforms
+  platforms sensorData = {0,0,0,0,0,0,0,0,0}; // Creates a structure called sensorData to receive data from sensor platforms
   RTC_DATA_ATTR platforms platform[numberOfPlatforms]; //stores the reaadings persistently in an array of structures
-  
+  RTC_DATA_ATTR uint8_t priorDoor = 0; //last door status = 0 (closed) or 1 (open)
   RTC_DATA_ATTR int dbm[] = {-99,0,0,0};      //hub signal strenth not included in the platform structure
   RTC_DATA_ATTR uint16_t vbat[] = {2500,0,0,0}; //hub battery voltage (mv) not included in the platform structure
   //**********************
@@ -215,34 +217,40 @@ The code within the '#ifdef ESPNOW to #endif compiler directives is adapted from
   #define h2oThreshhold  20         // water threshhold % which will cause display or IFTTT alert if enabled
   #define luxThreshhold  45         // light threshhold % which will cause display or IFTTT alert if enabled
 
-  #ifdef alertMode
-    //Arrays to indicate which sensors can be used to generate IFTTT alert
-    uint8_t iftTemps[] = {1,1,1,1}, iftHums[]={0,0,0,0}, iftLuxs[]={0,1,0,0}, iftH2os[]={0,1,0,0}, iftDoors[]={0,0,1,1};
+  #ifdef alertMode  
+    //Arrays to indicate which sensors can be used to generate an alert
+    uint8_t iftTemps[] = {1,0,0,0}, iftHums[]={0,0,0,0}, iftLuxs[]={0,1,0,0}, iftH2os[]={0,1,0,0}, iftDoors[]={0,0,1,1}, iftPirs[]={0,0,1,0};
     
-    #define tempHighLimit 90            // temperature upper limit which will cause IFTTT alert
-    #define tempLowLimit 45             // temperature lower limit which will cause IFTTT alert
+    #define tempHighLimit 90            // temperature upper limit which will cause alert
+    #define tempLowLimit 45             // temperature lower limit which will cause alert
     #define tempIncrement 5             // Increment by which temp threshholds are moved to prevent multiple alarms caused by temp fluctuations around the threshhold
-    
+
+    //Set initial conditions
     RTC_DATA_ATTR int tempHighThresh[]={tempHighLimit,tempHighLimit,tempHighLimit,tempHighLimit};  //persistently keeps track of adaptive high temp threshhold
     RTC_DATA_ATTR int tempLowThresh []={tempLowLimit,tempLowLimit,tempLowLimit,tempLowLimit};      //persistently keeps track of adaptive low temp threshhold
     int tempHighThreshReset[numberOfPlatforms];
     int tempLowThreshReset [numberOfPlatforms];
-    
-    RTC_DATA_ATTR int luxReportedLow[]={0,0,0,0};            
+
+    RTC_DATA_ATTR int luxReportedLow[]={1,1,1,1};            
     RTC_DATA_ATTR int luxReportedHigh[]={0,0,0,0};
     int luxReportedHighReset[numberOfPlatforms];
     int luxReportedLowReset[numberOfPlatforms];
     
-    RTC_DATA_ATTR int h2oReportedLow[]={0,0,0,0};
+    RTC_DATA_ATTR int h2oReportedLow[]={1,1,1,1};
     RTC_DATA_ATTR int h2oReportedHigh[]={0,0,0,0};
     int h2oReportedHighReset[numberOfPlatforms];
     int h2oReportedLowReset[numberOfPlatforms];
     
     
-    RTC_DATA_ATTR int doorReportedLow[]={0,0,0,0};
+    RTC_DATA_ATTR int doorReportedLow[]={1,1,1,1};
     RTC_DATA_ATTR int doorReportedHigh[]={0,0,0,0};
     int doorReportedHighReset[numberOfPlatforms];
     int doorReportedLowReset[numberOfPlatforms];
+
+    RTC_DATA_ATTR int pirReportedLow[]={1,1,1,1};
+    RTC_DATA_ATTR int pirReportedHigh[]={0,0,0,0};
+    int pirReportedHighReset[numberOfPlatforms];
+    int pirReportedLowReset[numberOfPlatforms];   
 
   #endif  
 
@@ -252,13 +260,13 @@ The code within the '#ifdef ESPNOW to #endif compiler directives is adapted from
 
   uint64_t uS_TO_S_FACTOR = 1000000;  // Conversion factor for micro seconds to seconds  
   RTC_DATA_ATTR int bootCount = 0;    //Incremented after first setup so delay only happen on initial startup gives time for user to open Status monitor 
-  RTC_DATA_ATTR int heartbeatToggle=1; //used by postHeartbeat to alternate destination to ifttt.com (when value=1) and dweet.io (when value=0)
 
   uint8_t type;                    //fona.type
   char imei[16] = {0};             // 16 character buffer for IMEI
   char URL[255];                   // buffer for request URL
   char body[255];                  // buffer for POST 
-  
+  uint8_t wakeupID;                   //reason sensor wode up; see readWakeupID 
+
   //*****************
   // Timer stuff
   //*****************
@@ -286,7 +294,7 @@ The code within the '#ifdef ESPNOW to #endif compiler directives is adapted from
   #ifdef BOTLETICS                      // Botletics shield or and-global module with esp32
     #define UART_BAUD   9600
     #define pinBoardLED 2               // ESP32 on board led
-    #define pinFONA_RST 5               // BOTLETICS shield D7
+    #define pinFONA_RST 5               // BOTLETICS shield D7  global=S
     #define pinFONA_TX 16               // ESP32 hardware serial RX2 to shield 10 TX
     #define pinFONA_RX 17               // ESP32 hardware serial TX2 to shield 11 RX
     #define pinFONA_PWRKEY 18           // BOTLETICS shield 6
@@ -319,12 +327,18 @@ The code within the '#ifdef ESPNOW to #endif compiler directives is adapted from
   #define pinAh2o 36                  // analog flood measure
   #define pinPhotoCell 34             // esp32 analog input; photocell pulled high, 
                                       // 100K reistor pulled low, node to GPIO
+  #define pinPir 39                   //HC-SR501 PIR sensor                                      
   #ifdef DHT_
     #define pinDHT 32                 // DHT temperature & Humidity sensor
   #endif
+  #define pinDoor 35                  //door wired to magnetic reed switch, NO & C connected 
+                                      //  to pinDoor and ground; 1K pullup R to pinDoor & 3.3v
+                                      //  pinDoor = 1 = closed, 0 = open.
+                                      //NOTE if this pin is changed, 
+                                      //  change setupWakeupConditions as well.
   
   //*****************
-  // Sensor Libraries
+  // Temp Sensor Libraries
   //*****************
 
   #include <Wire.h>                 // 12C
@@ -343,7 +357,11 @@ The code within the '#ifdef ESPNOW to #endif compiler directives is adapted from
     #define DHTTYPE DHT11           // can also be DHT22, etc
     DHT dht(pinDHT,DHTTYPE);
   #endif 
-        
+  #ifdef SHT20_  
+    #include "DFRobot_SHT20.h"
+    DFRobot_SHT20 sht20(&Wire, SHT20_I2C_ADDR);
+  #endif     
+  
   //*****************
   // OLED Libraries
   //*****************
@@ -419,144 +437,107 @@ The code within the '#ifdef ESPNOW to #endif compiler directives is adapted from
     Adafruit_MQTT_Subscribe feed_command = Adafruit_MQTT_Subscribe(&mqtt, SECRET_adaMQTT_USERNAME "/feeds/command");
   #endif
 
-//*****************
+  /************************************
+  void IRAM_ATTR doorChangeInterrupt() {  //disabled can poll door fast in loop
+    //door callback function counts door changes
+    sensorData.door ++; 
+    #ifdef printMode
+      Serial.println(F("*doorChangeInterrupt*"));
+      printSensorData();
+    #endif  
+  }
+  */
+  /************************************
+  void IRAM_ATTR pirInterrupt() {  //disabled due to excessive false interrupts
+    //PIR callback function counts pir changes
+    sensorData.pir ++; //= sensorData + digitalRead(pinPir);
+    #ifdef printMode
+      Serial.println(F("*pirInterrupt*"));
+      printSensorData();
+    #endif  
+  }
+  */
+///////////////////////
 // *** Setup() ***
-//*****************
-  
+//////////////////////
 void setup() {
-   delay(500);                      //ESP32 Bug workaround -- don't reference rtc ram too soon.
+   delay(200);                      //ESP32 Bug workaround -- don't reference rtc ram too soon!!
    setupPinModes();                 // Set Pin Modes INPUT / OUTPUT (necessary to turn board LED on, etc.) 
-   if (bootCount ==0) {blinkBoardLED(5);}    // blink LED for 5 sec for feedback and to give user time to activate serial console
    initializeArrays();              // Initialize sensor threshholds etc.
+   wakeupID = readWakeupID();       //process wakeup sources & return wakeup indicator
    setupOledDisplay(); 
+   displayVersion();                //display version and blink onboard led 5 sec on bootCount=0
+   turnOnBoardLED();   
    for (uint8_t i=0; i< numberOfPlatforms; i++){  // for each sensor:
       displayStatus(i);             // update OLED display with new or prior readings      
    }
-   #ifdef printMode
-      Serial.begin(115200);         // Initialize Serial Monitor 
-      Serial.print(F("***** ")); Serial.print(F(VERSION));Serial.println(F(" *****starts after 5 sec ***"));
-      Serial.print(F("bootCount= "));Serial.println(bootCount);
-      printWakeupReason();
-      printSensorData();
-   #endif
+   serialPrintVersion();            //Show startup info to serial monitor, turnOnBoardLED if printMode enabled
+   //attachInterrupt(digitalPinToInterrupt(pinPir), pirInterrupt, RISING);  //in case you want to try it!
+   //attachInterrupt(digitalPinToInterrupt(pinDoor), doorChangeInterrupt, CHANGE); //in case you want to try it!
    setupSensors();                  // Wake up the HUB temp sensors 
-   if (bootCount ==0){            // if first boot (not wakeup)
-     #ifdef cellularMode              // If cellular comms is enabled
-       powerUpSimModule();          // Power up the SIM7000 module by goosing the PWR pin 
-       delay (5000);
-       simModuleOffIfSimSleepMode();// Power off the SIM7000 module by goosing the PWR pin if simSleepMode = 1
-       #ifdef testCellular          //if we want to test cellular data on first startup
-          activateCellular(); 
-          readSignalStrength(0);
-          postSensorData();       // upload test data if enabled
-          displayStatus(0);          // update OLED display to show test data
-          simModuleOffIfSimSleepMode(); // Power off the SIM7000 module by goosing the PWR pin if simSleepMode = 1
-       #endif      
-     #endif
+   if (bootCount ==0){              // if first boot or restart (not wakeup)
+     runSelfTest();                 //power SIM on/off, test Cellular network if testCellular enabled 
    }  
-   delay (5000);
    setupEspNow();                   // initialize communication with with external sensor platforms if enabled
-   #ifdef adaMQTT_Subscribe   
-     activateCellular(); 
-     MQTT_connect();
-     #ifdef printMode
-       Serial.println(F("Subscribe begin............."));
-     #endif
-     mqtt.subscribe(&feed_command); // Only if you're using MQTT
-     #ifdef printMode
-       Serial.println(F("Subscribe complete............."));
-     #endif
-   #endif   
+   setupMQTT_Subscribe();           // setup if adaMQTT_Subscribe enabled
    bootCount++;                     // increment boot counter
+   turnOffBoardLED();
 }
 
-//*****************
+/////////////////
 // ***  Loop()  ***
-//*****************
+//////////////////
   
-void loop() {  
-    
-  //0. Go to sleep if snooze mode nap time
-    if (espSleepSeconds >0 && espAwakeSeconds >0 && espAwakeTimeIsUp(espAwakeSeconds*1000) ==1 ){
-      #ifdef printMode
-        Serial.println(F(" "));Serial.print(F("sleeping "));Serial.print(espSleepSeconds);Serial.println(F(" seconds..zzzz"));
+void loop() {
+  //1. Poll certain local sensors if they exist  
+  readDoor();
+  readAh2o();
+  readDh2o();
+  readPhotoCell(); 
+  readPir();                
+     
+  //2. read local and remote sensors if available and display on OLED and serial monitor
+  for (uint8_t i=0; i< numberOfPlatforms; i++){  // for each sensor:
+    alert[i]=0;                   //clear alert
+    if (platformStatus[i]==0){    // if sensor has not been sampled yet:    
+      #ifdef WIFI                 // if we are using http GET via wifi connection with sensor platforms:
+                                  // NOTE if using espNOW the data will be pushed to HUB; no need for further setup
+        killWifi();               // prepare to connect via wifi with server
+        if(setupWifi(i)==0){      // connect to local ESP32(i) wifi server if not local
       #endif
-      ESP.deepSleep(espSleepSeconds * uS_TO_S_FACTOR);
-    }
- 
-  //1. read local and remote sensors 
-  if (sensorTimeIsUp(samplingRateSeconds*1000) ==1 ){
-    for (uint8_t i=0;i<numberOfPlatforms;i++){  //clear alerts
-      alert[i]=0;
-    }
-    for (uint8_t i=0; i< numberOfPlatforms; i++){  // for each sensor:
-      if (platformStatus[i]==0){    // if sensor has not been sampled yet:    
-        #ifdef WIFI                 // if we are using http GET via wifi connection with sensor platforms:
-                                    // NOTE if using espNOW the data will be pushed to HUB; no need for further setup
-          killWifi();               // prepare to connect via wifi with server
-          if(setupWifi(i)==0){      // connect to local ESP32(i) wifi server if not local
-        #endif
-            platformStatus[i]= readSensorData(i); // need if no sleep time      
-            if(platformStatus[i]==1){ //determine if sensor data has been updated
-              sensorStatus[i]=1;    // indicate new data - display ":" preceding data in displayStatus()
-              printSensorData();
-              alert[i]= processAlerts(i);    // compare sensors to threshholds and set alert status        
-            }  
-            #ifdef WIFI  
-              killWifi();
-          }
-            #endif
-      }  
-      displayStatus(i);                   // update OLED display if there is one
-      platform[i].id=numberOfPlatforms+1; //new data will update id
-      #ifdef alertMode
-        platformStatus[i]=0;              //indicates readiness to read new data 
-      #endif      
-    }
-    delay(5000);                // allow latest display time before toggle timer takes over
-
-    //1a. if alertMode enabled then post alerts
+          platformStatus[i]= readSensorData(i); // need if no sleep time      
+          if(platformStatus[i]==1){ //determine if sensor data has been updated
+            sensorStatus[i]=1;    // indicate new data - display "%" after humidity in displayStatus()
+            printSensorData();
+            alert[i]= processAlerts(i);    // compare sensors to threshholds and set alert status        
+          }  
+          #ifdef WIFI  
+            killWifi();
+        }
+          #endif
+    }  
+    displayStatus(i);                   // update OLED display if there is one
+    platform[i].id=numberOfPlatforms+1; //new data will update id
     #ifdef alertMode
-      uint8_t alerts = 0;             // determine whether we have one or more alerts:    
-      for (uint8_t i=0;i<numberOfPlatforms;i++){  //determine if an alarm threshhold was crossed
-        alerts=alerts+alert[i];
-      }
-      if (alerts>0){              // if we have alerts, activate cellular network and report via ifttt if alertMode set
-        #ifdef cellularMode
-          activateCellular(); 
-          readSignalStrength(0);
-          postAlert();
-          displayStatus(0);             // update OLED display 
-          simModuleOffIfSimSleepMode(); // Power off the SIM7000 module by goosing the PWR pin if simSleepMode 
-        #endif
-      }
+      platformStatus[i]=0;              //indicates readiness to read new data 
+    #endif      
+    
+    //2a. if alertMode enabled then post alerts
+    #ifdef alertMode
+      postAlerts();
     #endif
   }
 
-  
-  //2. heartbeat: upload latest data if its time
+  //3. heartbeat: upload latest data if its time
   #ifdef cellularMode
     if (heartbeatTimeIsUp(heartbeatMinutes*60000L) ==1 ){
-      activateCellular();
-      readSignalStrength(0);
-      postSensorData();          
-      displayStatus(0);             // update OLED display here to update signal strength
-      simModuleOffIfSimSleepMode(); // Power off the SIM7000 module by goosing the PWR pin if simSleepMode
-      #ifdef alertMode
-        for (uint8_t i=0; i<numberOfPlatforms; i++){    //reset for next heartbeat cycle 
-          sensorStatus[i]=0; 
-        }
-      #endif  
+      postSensorHeartbeatData();
     }
   #endif
-  
-  //3. display data on serial monitor JSON format for diagnostic purposes
-  if (serialTimeIsUp(serialMonitorSeconds*1000) ==1 ){
-    #ifdef printMode
-      formatData();    
-      sprintf(body, "{\"value1\":\"%s\"}", buf);
-      Serial.println();
-    #endif  
+
+  //4. Go to sleep if snooze mode nap time
+  if (espSleepSeconds >0 && espAwakeSeconds >0 && espAwakeTimeIsUp(espAwakeSeconds*1000) ==1 ){
+    napTime();
   }
 }
 
@@ -730,46 +711,66 @@ void displayStatus(uint8_t i){
         oled.print("dbm:  ");oled.println(dbm[i]);
       #endif
     }else{  
-    oled.setFont(Arial_14);
-    oled.setCursor(0,16*i);
-    if (sensorStatus[i] ==0){
-      oled.print("?");  //indicates old or no measurement
-    }else{  
-      oled.print(":");  //indicates current measurement
-    }
+      oled.setFont(Arial_14);
+      //oled.setCursor(0,16*i);
+      //oled.setCursor(i,0);
+ /*     //clear the row causes flicker
+      oled.setCursor(0,i*2);  //col = 0, row = 8-panel rows; we are using 16 panels
+      for(uint8_t i=0;i<24;i++){
+        oled.print(F(" "));
+      }
+      oled.println(F(""));
+*/      
+      oled.setCursor(0,i*2); 
+      oled.print(int(platform[i].temperature + .5));
+      oled.print(" ");  
+      oled.print(int(platform[i].humidity + .5));
+      if (sensorStatus[i] ==0){
+        oled.print("? ");  //indicates old or no measurement
+      }else{  
+        oled.print("% ");  //indicates current measurement
+      }  
 
-    oled.print(int(platform[i].temperature + .5));
-    oled.print(" ");  
-    oled.print(int(platform[i].humidity + .5));
-    oled.print("% ");
-  
-    //if (dbms[i]==1){oled.print(9+dbm[i]/10);}else{oled.print("-");}
-    if (dbms[i]==1){oled.print(dbm[i]/10);}else{oled.print("-");}
-
-    if (h2os[i]==0){oled.print("--- ");
+      if (luxs[i]==0){//oled.print(" L"); 
       }else{
-        if (platform[i].aH2o - h2oThreshhold > 0){
-          oled.print("WET");
+        oled.print("L");
+        oled.print( (int (platform[i].lux) )/10); 
+        oled.print(" ");
+      }
+      
+      if (doors[i]==1){  //read current door status and count of changes
+        if(digitalRead(pinDoor)==1) {
+          oled.print(F("s"));
         }else{
-          oled.print("DRY");
-        }
-        oled.print(platform[i].dH2o); 
+          oled.print(F("o"));
+        }      
+        oled.print(platform[i].door);   //can be more than 1
+      } 
+  
+      if (h2os[i]==1){
+          if (platform[i].aH2o - h2oThreshhold > 0){
+            oled.print(F(" w"));
+          }else{
+            oled.print(F(" d"));
+          }
+          oled.print(platform[i].dH2o); 
+          oled.print(F(" "));
       }
-     
-    if (doors[i]==0){oled.print("---- "); 
-      }else{
-      if(platform[i].door==0){
-        oled.print("SHUT ");
-      }else{
-        oled.print("OPEN ");
+          
+      if (pirs[i]==1){//oled.println("M");
+        oled.print(F(" m")); 
+        oled.print(platform[i].pir);  
       }
+
+      if (dbms[i]==0){//oled.print("-");
+        //oled.println(""); 
+      }else{
+        oled.print(F(" "));
+        oled.print(dbm[i]);
+        oled.print(F(" dbm"));
+      }
+      oled.println(F("    "));  //overwrite prior data on this row
     }
-    if (luxs[i]==0){oled.println("---"); 
-    }else{
-      oled.print(platform[i].lux);
-      oled.println("%");
-    } 
-  }  
   #endif 
 }
 
@@ -784,6 +785,21 @@ static int displayTimeIsUp(long msec){    //Read data at timed intervals
     return(0);
   }
 } 
+
+//*********************************
+void displayVersion(){  
+  //display version and blink onboard led 5 sec
+  if (bootCount ==0) {
+    #ifdef OLED_
+      //char buf0[6],buf1[6];
+      oled.clear(); 
+      //oled.setFont(fixed_bold10x15);
+      oled.setFont(Arial_14);
+      oled.println(VERSION);      
+    #endif
+    blinkBoardLED(5);    // blink LED for 5 sec for feedback and to give user time to activate serial console   
+  }
+}  
 
 //***********************************
 static int espAwakeTimeIsUp(long msec){      
@@ -803,7 +819,8 @@ void espNowOnDataRecv(const uint8_t * mac_addr, const uint8_t *incomingData, int
   #ifdef ESPNOW
       char macStr[18];
       #ifdef printMode
-        Serial.print("Packet received from: ");
+        Serial.println(F("*espNowOnDataRecv*"));
+        Serial.print(F("Packet received from: "));
         snprintf(macStr, sizeof(macStr), "%02x:%02x:%02x:%02x:%02x:%02x",
           mac_addr[0], mac_addr[1], mac_addr[2], mac_addr[3], mac_addr[4], mac_addr[5]);
         Serial.println(macStr);
@@ -821,10 +838,14 @@ void espNowOnDataRecv(const uint8_t * mac_addr, const uint8_t *incomingData, int
       platform[sensorData.id].lux = sensorData.lux;
       platform[sensorData.id].aH2o = sensorData.aH2o;
       platform[sensorData.id].dH2o = sensorData.dH2o;
-      platform[sensorData.id].door = sensorData.door;
-      
+      //platform[sensorData.id].door = sensorData.door;
+      //platform[sensorData.id].pir = sensorData.pir;
+      //count door openings and movement hits
+      platform[sensorData.id].door =  platform[sensorData.id].door + sensorData.door;
+      platform[sensorData.id].pir = platform[sensorData.id].pir  + sensorData.pir;
+            
       #ifdef printMode    
-        Serial.println("id      temp    hum    pres    lux   aH2o    dH2o    door");
+        Serial.println(F("id      temp    hum    pres    lux    aH2o    dH2o    door     pir"));
         Serial.print(sensorData.id);Serial.print("\t");
         Serial.print(sensorData.temperature);Serial.print("\t");
         Serial.print(sensorData.humidity);Serial.print("\t");
@@ -832,109 +853,112 @@ void espNowOnDataRecv(const uint8_t * mac_addr, const uint8_t *incomingData, int
         Serial.print(sensorData.lux);Serial.print("\t");     
         Serial.print(sensorData.aH2o);Serial.print("\t"); 
         Serial.print(sensorData.dH2o);Serial.print("\t"); 
-        Serial.println(sensorData.door);
+        Serial.print(sensorData.door);Serial.print("\t"); 
+        Serial.println(sensorData.pir);
       #endif 
   #endif
 }
 
 //*********************************
-void formatData(){                   //transfer comma separated sensor data to buf
+void formatData(){                   
+  //transfer comma separated sensor data to buf for transmit to ifttt etc.
   #ifdef testMode 
     Serial.println(F("*formatData*"));
   #endif
-
- // buf[0]={0};                           //Initialize data buffer
-  strcpy (buf,dataTag);strcat(buf,"_"); //enter data TAG and separator
+  
+  char prefix[2] = {'_',0};  //separator used between groups of similar data
+  char separator[2] = {',',0};
+  char comma[2]={',',0};  
+  strcpy (buf,dataTag); //lead with unique HUB data stream identifier 
 
   //process temperature
+  strcpy(separator,prefix);  //separator used between groups of similar data  
   for(int i=0;i<numberOfPlatforms;i++){
     if(temps[i]==1){
+      strcat(buf,separator);
       dtostrf(platform[i].temperature, 1, 0, buf2); 
       strcat(buf, buf2);
-      if (i==(numberOfPlatforms-1)){
-        if(sensorStatus[i]==1){
-          strcat(buf,"F_");   //comma separator causes error in http get in sendAT as written 
-        }else{  
-          strcat(buf,".F_");  //Period to indicate older reading
-        }  
-      }else{
-        if(sensorStatus[i]==1){
-          strcat(buf,",");   //comma separator causes error in http get in sendAT as written 
-        }else{  
-          strcat(buf,".");  //Period to indicate older reading
-        }  
-      }
+      strcpy(separator,comma);
     }
   }
-
+  strcat(buf,"F");
+  
   //process humidity
+  strcpy(separator,prefix);  //separator used between groups of similar data  
   for(int i=0;i<numberOfPlatforms;i++){
     if(hums[i]==1){
+      strcat(buf,separator);
       dtostrf(platform[i].humidity, 1, 0, buf2); 
       strcat(buf, buf2);
-      if (i==(numberOfPlatforms-1)){
-        strcat(buf,"%_");
-      }else{
-        strcat(buf,","); 
-      }
+      strcpy(separator,comma);
     }
   }
-
+  strcat(buf,"%");
+  
   //process photocell lux
+  strcpy(separator,prefix);  //separator used between groups of similar data  
   for(int i=0;i<numberOfPlatforms;i++){
     if(luxs[i]==1){
-      dtostrf(platform[i].lux, 1, 0, buf2); 
+      strcat(buf,separator);
+      dtostrf((platform[i].lux/10), 1, 0, buf2); 
       strcat(buf, buf2);
-      if (i==(numberOfPlatforms-1)){
-        strcat(buf,"_");
-      }else{
-        strcat(buf,","); 
-      }
+      strcpy(separator,comma);
     }
   }
 
   //process door incoming 1 = closed door
+  strcpy(separator,prefix);  //separator used between groups of similar data  
   for(int i=0;i<numberOfPlatforms;i++){
     if(doors[i]==1){
+      strcat(buf,separator);
       dtostrf(platform[i].door, 1, 0, buf2); 
       strcat(buf, buf2);
-      if (i==(numberOfPlatforms-1)){
-        strcat(buf,"_");
-      }else{
-        strcat(buf,","); 
-      }
+      strcpy(separator,comma);
     }
   }
   
-  //process ah2o
+  //process ah2o,dH2o
+  strcpy(separator,prefix);  //separator used between groups of similar data  
   for(int i=0;i<numberOfPlatforms;i++){
     if(h2os[i]==1){
+      strcat(buf,separator);
       dtostrf(platform[i].aH2o, 1, 0, buf2); 
       strcat(buf, buf2);
+      strcpy(separator,comma);
       strcat(buf,",");
       dtostrf(platform[i].dH2o, 1, 0, buf2); 
       strcat(buf, buf2);
-      if (i==(numberOfPlatforms-1)){
-        strcat(buf,"_");
-      }else{
-        strcat(buf,","); 
-      }
     }
   }
-  
-  //process signal strength last
-  //for(int i=0;i<numberOfPlatforms-1;i++){
+
+  //process pir incoming 1 = person detected
+  strcpy(separator,prefix);  //separator used between groups of similar data  
+  for(int i=0;i<numberOfPlatforms;i++){
+    if(pirs[i]==1){
+      strcat(buf,separator);
+      dtostrf(platform[i].pir, 1, 0, buf2); 
+      strcat(buf, buf2);
+      strcpy(separator,comma);
+    }
+  }
+
+  //process signal strength
+  strcpy(separator,prefix);  //separator used between groups of similar data  
   for(int i=0;i<numberOfPlatforms;i++){  
     if(dbms[i]==1){
+      //strcat(buf,separator);  //let minus sogn of dbm be separator
       dtostrf(dbm[i], 1, 0, buf2); 
       strcat(buf, buf2);
-      if (i==(numberOfPlatforms-1)){
-        strcat(buf,"db");
-      }else{
-        //since dbm is last, we don't need a separator
-      }
+       strcpy(separator,comma);
     }
   }
+
+  //append bootCount
+  strcpy(separator,prefix);  //separator used between groups of similar data 
+  strcat(buf,separator); 
+  dtostrf(bootCount, 1, 0, buf2); 
+  strcat(buf,buf2);
+  
   #ifdef printMode
     Serial.print(F("buf: "));Serial.println(buf);
   #endif
@@ -1086,7 +1110,16 @@ int8_t MQTT_publish_checkSuccess(Adafruit_MQTT_Publish &feed, const char *feedCo
   return retn;
 }
 #endif 
-  
+
+//************************************
+void napTime(){
+  setupWakeupConditions();  //interrupt if door or PIR state changes
+  #ifdef printMode
+    Serial.println(F(" "));Serial.print(F("sleeping "));Serial.print(espSleepSeconds);Serial.println(F(" seconds..zzzz"));
+  #endif
+  ESP.deepSleep(espSleepSeconds * uS_TO_S_FACTOR);
+}
+      
 //************************************
 void postAlert(){                
   
@@ -1095,12 +1128,17 @@ void postAlert(){
      Serial.println(F("*postAlert*"));
   #endif
   #ifdef alertMode
-    if(!postSensorData==0){
+    if(postSensorData()==0){
+      #ifdef printMode
+        Serial.println(F("postSensorData Success"));
+      #endif
+    }else{  
       //if failed to post alert,restore adaptive thresholds to enable future alert  
       for (int i=0; i<numberOfPlatforms;i++){
         tempHighThresh[i] = tempHighThreshReset[i];
         tempLowThresh[i] = tempLowThreshReset[i];
         #ifdef printMode
+          Serial.println(F("postSensorFail"));
           Serial.print(F("reseting temp threshholds to "));
           Serial.print(tempLowThresh[i]);
           Serial.print(F(" and ")) ;
@@ -1112,6 +1150,9 @@ void postAlert(){
         h2oReportedLow[i] = h2oReportedLowReset[i];
         doorReportedHigh[i] = doorReportedHighReset[i];
         doorReportedLow[i] = doorReportedLowReset[i];
+        pirReportedHigh[i] = pirReportedHighReset[i];
+        pirReportedLow[i] = pirReportedLowReset[i];
+
         platform[i].id = i;
       }
     }  
@@ -1119,17 +1160,35 @@ void postAlert(){
 }
 
 //*********************************
+void postAlerts(){
+  uint8_t alerts = 0;             // determine whether we have one or more alerts:    
+  for (uint8_t i=0;i<numberOfPlatforms;i++){  //determine if an alarm threshhold was crossed
+    alerts=alerts+alert[i];
+  }
+  if (alerts>0){              // if we have alerts, activate cellular network and report via ifttt if alertMode set
+    #ifdef cellularMode
+      activateCellular(); 
+      readSignalStrength(0);
+      postAlert();
+      displayStatus(0);             // update OLED display 
+      simModuleOffIfSimSleepMode(); // Power off the SIM7000 module by goosing the PWR pin if simSleepMode 
+    #endif
+  }
+}
+      
+//*********************************
 int8_t postSensorData(){       //upload sensor data to dweet.io or IFTTT
 
+  #ifdef printMode 
+    Serial.println(F("*postSensorData*"));
+  #endif
   int8_t retn = -1;  //returns 0 if connection success
   formatData();      // transfer sensor data to buf
   uint8_t i;         //keeps track of attempted postings   
   uint8_t err; 
   delay(1000);
   
-  #ifdef printMode 
-    Serial.println(F("*postSensorData*"));
-  #endif
+
   #ifdef adaMQTT
  
     retn = MQTT_connect();
@@ -1192,6 +1251,11 @@ int8_t postSensorData(){       //upload sensor data to dweet.io or IFTTT
     }   
   #endif
   if (retn==0){
+    for(uint8_t j=0;j<numberOfPlatforms;j++){
+      platform[j].door =  0;
+      priorDoor = 0;
+      platform[j].pir = 0;
+    }  
     return 0;
   } 
 
@@ -1248,6 +1312,11 @@ int8_t postSensorData(){       //upload sensor data to dweet.io or IFTTT
     }   
   #endif
   if (retn==0){
+    for(uint8_t j=0;j<numberOfPlatforms;j++){
+      platform[j].door =  0;
+      priorDoor = 0;
+      platform[j].pir = 0;
+    }  
     return 0;
   } 
 
@@ -1303,10 +1372,29 @@ int8_t postSensorData(){       //upload sensor data to dweet.io or IFTTT
     #endif
 
     if(i<postTries){ 
-      return 0;
+    for(uint8_t j=0;j<numberOfPlatforms;j++){
+      platform[j].door =  0;
+      priorDoor = 0;
+      platform[j].pir = 0;
+    }  
+    return 0;
     }
     #endif //dweetMode  
   return retn;
+}
+
+//*********************************
+void postSensorHeartbeatData(){
+  activateCellular();
+  readSignalStrength(0);
+  postSensorData();          
+  displayStatus(sensorID);             // update OLED display here to update signal strength
+  simModuleOffIfSimSleepMode(); // Power off the SIM7000 module by goosing the PWR pin if simSleepMode
+  #ifdef alertMode
+    for (uint8_t i=0; i<numberOfPlatforms; i++){    //reset for next heartbeat cycle 
+      sensorStatus[i]=0; 
+    }
+  #endif  
 }
 
 //*********************************
@@ -1353,23 +1441,23 @@ void printSensorData(){
        Serial.print(platform[i].lux);Serial.print(F(" lux "));
        Serial.print(platform[i].aH2o);Serial.print(F(" aH2o "));
        Serial.print(platform[i].dH2o);Serial.print(F(" dH2o "));
-       Serial.print(platform[i].door);Serial.println(F(" door "));
+       Serial.print(platform[i].door);Serial.print(F(" door "));
+       Serial.print(platform[i].pir);Serial.println(F(" pir "));
     }
   #endif
 }
 
 //********************************
-void printWakeupReason(){
-  #ifdef printMode  //print_wakeup_reason()
-    esp_sleep_wakeup_cause_t wakeup_reason;
-    wakeup_reason = esp_sleep_get_wakeup_cause();
-    switch(wakeup_reason){
-      case ESP_SLEEP_WAKEUP_EXT0 : Serial.println(F("Wakeup caused by external signal using RTC_IO")); break;
-      case ESP_SLEEP_WAKEUP_EXT1 : Serial.println(F("Wakeup caused by external signal using RTC_CNTL")); break;
-      case ESP_SLEEP_WAKEUP_TIMER : Serial.println(F("Wakeup caused by timer")); break;
-      case ESP_SLEEP_WAKEUP_TOUCHPAD : Serial.println(F("Wakeup caused by touchpad")); break;
-      case ESP_SLEEP_WAKEUP_ULP : Serial.println(F("Wakeup caused by ULP program")); break;
-      default : Serial.printf("Wakeup was not caused by deep sleep: %d\n",wakeup_reason); break;
+void printWakeupID(uint8_t wakeupID){
+  #ifdef printMode 
+    Serial.print(F("*printWakeupID* ---> ")); 
+    switch(wakeupID){
+      case 0 : Serial.println(F("RTC_IO = door")); break;
+      case 1 : Serial.println(F("RTC_CNTL = PIR")); break;
+      case 2 : Serial.println(F("timer")); break;
+      case 3 : Serial.println(F("touchpad")); break;
+      case 4 : Serial.println(F("ULP program")); break;
+      default : Serial.println(F("default = restart")); break;
     }
   #endif    
 }
@@ -1390,7 +1478,9 @@ int processAlerts(uint8_t i) {         // set flag to post alert to iFTTT if tem
         Serial.print(" h2o: " + String(h2oReportedLow[i]));
         Serial.print(" - " + String(h2oReportedHigh[i]));
         Serial.print(" door: " + String(doorReportedLow[i]));
-        Serial.println(" - " + String(doorReportedHigh[i]));
+        Serial.print(" - " + String(doorReportedHigh[i]));
+        Serial.print(" pir: " + String(pirReportedLow[i]));
+        Serial.println(" - " + String(pirReportedHigh[i]));
     #endif
 
     tempHighThreshReset[i] = tempHighThresh[i];
@@ -1400,7 +1490,9 @@ int processAlerts(uint8_t i) {         // set flag to post alert to iFTTT if tem
     h2oReportedLowReset[i] = h2oReportedLow[i];
     h2oReportedHighReset[i] = h2oReportedHigh[i];
     doorReportedHighReset[i] = doorReportedHigh[i];
-    doorReportedLowReset[i] = doorReportedLow[i];
+    doorReportedLowReset[i] = doorReportedLow[i]; 
+    pirReportedHighReset[i] = pirReportedHigh[i];
+    pirReportedLowReset[i] = pirReportedLow[i];
         
     if (iftTemps[i]==1){
       if (platform[i].temperature - tempHighThresh[i] > 0) {
@@ -1425,7 +1517,7 @@ int processAlerts(uint8_t i) {         // set flag to post alert to iFTTT if tem
             Serial.print(F(" ;3-Temp is less than ")); Serial.print(tempHighThresh[i]);  
           #endif  
           tempHighThresh[i] = tempHighThresh[i] - tempIncrement;  
-          flag=1;  //postToIfTTT(); 
+          flag=1;  //post alert  
           goto lux;    
         }
       }
@@ -1435,7 +1527,7 @@ int processAlerts(uint8_t i) {         // set flag to post alert to iFTTT if tem
             Serial.print(F(" ;4-Temp exceeds ")); Serial.print (tempLowThresh[i]);  
           #endif  
           tempLowThresh[i] = tempLowThresh[i] + tempIncrement;  
-          flag=1;  //postToIfTTT(); 
+          flag=1;  //post alert 
           goto lux;    
         }
       }
@@ -1451,7 +1543,7 @@ lux:
         if (luxReportedHigh[i]==0) {
           luxReportedHigh[i]=1 ;
           luxReportedLow[i] = 0;
-          flag=1; //postToIfTTT(); 
+          flag=1; //post alert 
           #ifdef printMode 
             Serial.print(F("; Lights ON alert")); 
           #endif  
@@ -1463,23 +1555,23 @@ lux:
         if (luxReportedLow[i]==0) {
           luxReportedLow[i]=1 ;
           luxReportedHigh[i] = 0;
-          flag=1; //postToIfTTT(); 
+          flag=1; //post alert 
           #ifdef printMode 
             Serial.print(F("; Lights OFF alert")); 
           #endif  
         }
       }
     }
-doors:
+    //doors:
     if(iftDoors[i]==1){
-      if(platform[i].door == 1){
+      if(platform[i].door >= 1){
          #ifdef printMode 
             Serial.print(F("; door open")); 
          #endif 
         if (doorReportedHigh[i]==0) {
           doorReportedHigh[i]=1 ;
           doorReportedLow[i] = 0;
-          flag=1; //postToIfTTT(); 
+          flag=1; //post alert 
           #ifdef printMode 
             Serial.print(F("; door open alert")); 
           #endif 
@@ -1489,22 +1581,51 @@ doors:
             Serial.print(F("; door closed")); 
          #endif 
          if (doorReportedLow[i]==0) {
-          doorReportedLow[i]=1 ;
-          doorReportedHigh[i] = 0;
-          flag=1; //postToIfTTT();
+            doorReportedLow[i]=1 ;
+            doorReportedHigh[i] = 0;
+            flag=1; //post alert 
+            #ifdef printMode 
+              Serial.print(F("; door closed alert")); 
+            #endif 
+         }
+      }
+    }
+    
+    //PIRS:
+    if(iftPirs[i]==1){
+      if(platform[i].pir >= 1){
          #ifdef printMode 
-            Serial.print(F("; door closed alert")); 
+            Serial.print(F("; movement detected")); 
+         #endif 
+        if (pirReportedHigh[i]==0) {
+          pirReportedHigh[i]=1 ;
+          pirReportedLow[i] = 0;
+          flag=1; //post alert 
+          #ifdef printMode 
+            Serial.print(F("; movement detected alert")); 
+          #endif 
+        }
+      }else{
+         #ifdef printMode 
+            Serial.print(F("; movement NOT detected")); 
+         #endif 
+         if (pirReportedLow[i]==0) {
+          pirReportedLow[i]=1 ;
+          pirReportedHigh[i] = 0;
+          flag=1; //post alert 
+         #ifdef printMode 
+            Serial.print(F("; movement stopped alert")); 
          #endif 
          }
       }
     }
-h2o:
+    //h2o:
     if(iftH2os[i]==1){
       if(platform[i].aH2o - h2oThreshhold > 0){
         if (h2oReportedHigh[i]==0) {
           h2oReportedHigh[i]=1 ;
           h2oReportedLow[i] = 0;
-          flag=1; //postToIfTTT(); 
+          flag=1; //post alert 
           #ifdef printMode 
             Serial.print(F("; flood alert")); 
           #endif 
@@ -1513,7 +1634,7 @@ h2o:
         if (h2oReportedLow[i]==0) {
           h2oReportedLow[i]=1 ;
           h2oReportedHigh[i] = 0;
-          flag=1; //postToIfTTT();
+          flag=1; //post alert 
           #ifdef printMode 
             Serial.print(F("; NO flood alert")); 
           #endif 
@@ -1527,6 +1648,17 @@ h2o:
   #endif  //alertMode
   
   return(flag);
+}
+
+//***********************************
+void readAh2o(){
+  //Read analog value and convert to % as whole number 0-99
+  #ifdef printMode
+    //Serial.println(F("*readAh2o*"));
+  #endif  
+  if(h2os[sensorID]==1){
+    platform[sensorID].aH2o = 2.44*(4095-analogRead(pinAh2o))/100;   //whole number 1-99 %
+  }  
 }
 
 //***********************************
@@ -1548,6 +1680,39 @@ void readBatteryVoltage (uint8_t i){  //crashes if using fona - send 2500 for no
         }
     */    
 }
+
+//***********************************
+void readDh2o(){
+  #ifdef printMode
+    //Serial.println(F("*readDh2o*"));
+  #endif  
+  if(h2os[sensorID]==1){
+    //sensor reads 1 when dry, 0 when wet
+    //we want 0=dry (normal status)        
+    platform[sensorID].dH2o = !digitalRead(pinDh2o);
+  }  
+}
+
+//***********************************
+void readDoor(){  
+  #ifdef printMode
+    //Serial.print(F("*readDoor*"));Serial.print(F(" pinDoor: "));Serial.println(digitalRead(pinDoor));  
+  #endif
+  if (doors[sensorID]==1){  //interrupt updates doors count
+
+     //door = 1 when closed; we want 0 (normal state) when closed
+     if (platform[sensorID].door > 0){
+       if (priorDoor == !digitalRead(pinDoor)){
+       }else{
+         priorDoor=!digitalRead(pinDoor);
+         platform[sensorID].door ++;
+       }
+     }else{
+       platform[sensorID].door = !digitalRead(pinDoor);
+       priorDoor=platform[sensorID].door;
+     }
+  }
+}   
 //**********************************        
 bool readNetStatus() {
   #ifdef testMode
@@ -1564,6 +1729,32 @@ bool readNetStatus() {
   
   if (!(i == 1 || i == 5)) return false;
   else return true;
+}
+
+//***********************************
+void readPhotoCell(){
+  //Read analog value and convert to % as whole number 0-99
+  #ifdef printMode
+    //Serial.println(F("*readPhotoCell*"));
+  #endif  
+  if (luxs[sensorID]==1){
+     platform[sensorID].lux = 2.44*((4095-analogRead(pinPhotoCell))/100);  //whole number 1-99 %
+  }
+}
+
+//***********************************
+void readPir(){
+  #ifdef printMode
+    //Serial.print(F("*readPir* "));
+  #endif
+  if (pirs[sensorID]==1){
+    //pir = 0 when no motion (normal state)
+    platform[sensorID].pir = digitalRead(pinPir) + platform[sensorID].pir ;
+    //pirCount=pirCount+sensorData.pir;    
+  }  
+  #ifdef printMode
+    //Serial.println(sensorData.pir);
+  #endif
 }
 
 //*********************************
@@ -1619,10 +1810,8 @@ uint8_t readSensorData(uint8_t i){             // temp & voltage
        float x = dht.readTemperature(true);  //*F
        if (isnan(x)){
          returnFlag=0;      //causes ? on OLED
-         //x=temperature[i];
          x=platform[i].temperature;
        }
-       //temperature[i]=x;
        platform[i].temperature = x;
        
        x = (dht.readHumidity());
@@ -1631,20 +1820,38 @@ uint8_t readSensorData(uint8_t i){             // temp & voltage
        }
        platform[i].humidity = x;
      #endif  
-  
-     if(luxs[i]==1){         //read photocell if present
-       platform[i].lux =  2.44*(analogRead(pinPhotoCell)/100); //whole number 1-99 %
-     }else{
-       platform[i].lux = 0; 
-     }
-  
-     if(h2os[i]==1){         //read water detecter if present
-       platform[i].aH2o = 2.44*(4095-analogRead(pinAh2o))/100;   //whole number 1-99 %
-       platform[i].dH2o = digitalRead(pinDh2o);
-     }else{
-       platform[i].aH2o = 0; 
-       platform[i].dH2o = 0; 
-     }
+
+      #ifdef SHT20_
+        float x = 1.8*sht20.readTemperature()+32.0;
+        if (isnan(x)){
+          returnFlag=0;         //causes ? on OLED
+          x=platform[i].temperature;
+        }
+        platform[i].temperature = x;
+    
+        x = (sht20.readHumidity());  
+        if (isnan(x)){
+          x=platform[i].humidity;
+        }
+        platform[i].humidity=x;
+      #endif
+    
+     readPhotoCell();
+     readAh2o();
+     readDh2o();
+
+     if (pirs[i]==1){  //pirs handled by interrupt and wakeup
+       //pir = 0 when no motion (normal state); we count times opened since last report to cloud
+//       platform[i].pir = platform[i].pir +  digitalRead(pinPir);
+     } 
+
+     readDoor();
+//     if (doors[i]==1){  //interrupt updates doors count
+       //door = 1 when closed; we want 0 (normal state) when closed
+//       if (platform[i].door == 0){
+//         platform[i].door = !digitalRead(pinDoor);
+  //     }  
+    // } 
       
   }else if (sensors[i]=="wifi"){ 
     #ifdef WIFI
@@ -1741,6 +1948,50 @@ void readSignalStrength(int i){
     #endif
   #endif 
 }
+//*************************************
+uint8_t readWakeupID(){
+  //read wakeup reason and return code
+  #ifdef printMode 
+    Serial.println(F("*readWakupID*"));
+  #endif   
+  esp_sleep_wakeup_cause_t wakeup_reason;
+  wakeup_reason = esp_sleep_get_wakeup_cause();
+  switch(wakeup_reason){
+    case ESP_SLEEP_WAKEUP_EXT0 : 
+       sensorData.door ++ ;//= !digitalRead(pinDoor);
+       priorDoor=!digitalRead(pinDoor);
+       #ifdef printMode 
+         Serial.print(F("priorDoor: "));Serial.println(priorDoor);
+       #endif
+       //printSensorData();
+       return 0;
+    case ESP_SLEEP_WAKEUP_EXT1 :      
+       sensorData.pir ++; //= sensorData.pir + digitalRead(pinPir);
+       //printSensorData();
+       return 1;
+    case ESP_SLEEP_WAKEUP_TIMER : return 2;
+    case ESP_SLEEP_WAKEUP_TOUCHPAD : return 3;
+    case ESP_SLEEP_WAKEUP_ULP : return 4;
+    default : return 5;
+  }    
+}
+
+//*************************************
+void runSelfTest(){                 //pwr SIM on/off, test Cellular network if testCellular enabled 
+   #ifdef cellularMode              // If cellular comms is enabled
+     powerUpSimModule();          // Power up the SIM7000 module by goosing the PWR pin 
+     delay (5000);
+     simModuleOffIfSimSleepMode();// Power off the SIM7000 module by goosing the PWR pin if simSleepMode = 1
+     #ifdef testCellular          //if we want to test cellular data on first startup
+        activateCellular(); 
+        readSignalStrength(0);
+        postSensorData();       // upload test data if enabled
+        displayStatus(0);          // update OLED display to show initial data
+        simModuleOffIfSimSleepMode(); // Power off the SIM7000 module by goosing the PWR pin if simSleepMode = 1
+     #endif      
+   #endif
+}
+
 //*************************************
 int sendATCmd(char ATCode[], char parm1[], char parm2[]){  //220622
   /*send AT  to modem, check for response and return 0 if expected response true else return -1
@@ -1858,6 +2109,19 @@ static int sensorTimeIsUp(long msec){    //Read data at timed intervals
     return(0);
   }
 } 
+
+//*************************************
+void serialPrintVersion(){         
+   //Show startup info to serial monitor if printMode enabled
+   #ifdef printMode
+      Serial.begin(115200);         // Initialize Serial Monitor 
+      turnOnBoardLED();           //turn on board LED during setup
+      Serial.print(F("***** "));Serial.print(F(APP)); Serial.println(F(VERSION));
+      Serial.print(F("bootCount= "));Serial.println(bootCount);
+      printWakeupID(wakeupID);
+      printSensorData();
+   #endif
+}
 //***********************************
 static int serialTimeIsUp(long msec){    //Read data at timed intervals  
   static unsigned long previousMillis = 0;   
@@ -1887,6 +2151,21 @@ void setupEspNow(){
   #endif
 }
 
+//********************************* 
+void setupMQTT_Subscribe(){              //setup if adaMQTT_Subscribe enabled
+   #ifdef adaMQTT_Subscribe   
+     activateCellular(); 
+     MQTT_connect();
+     #ifdef printMode
+       Serial.println(F("Subscribe begin............."));
+     #endif
+     mqtt.subscribe(&feed_command); // Only if you're using MQTT
+     #ifdef printMode
+       Serial.println(F("Subscribe complete............."));
+     #endif
+   #endif 
+}   
+
 //*********************************  
 void setupOledDisplay(){
   #ifdef testMode
@@ -1910,9 +2189,19 @@ void setupPinModes(){
     digitalWrite(pinFONA_RST, HIGH); // Default state
     digitalWrite(pinFONA_PWRKEY, OUTPUT); //210220 ??
   #endif
-  //pinMode (pinDoor, INPUT);
-  pinMode (pinDh2o, INPUT_PULLUP);
-  pinMode (pinAh2o, INPUT); 
+  if (doors[sensorID]==1){
+    pinMode (pinDoor, INPUT);
+  }  
+  if (pirs[sensorID]==1){
+    pinMode (pinPir, INPUT);
+  }
+  if (luxs[sensorID]==1){
+    pinMode (pinPhotoCell, INPUT);
+  }  
+  if (h2os[sensorID]==1){  
+      pinMode (pinAh2o, INPUT);
+      pinMode (pinDh2o, INPUT_PULLUP);
+  }  
 }
 
 //*********************************
@@ -1922,13 +2211,14 @@ void setupSensors(){             // Wake up the MCP9808 if it was sleeping
   #endif
   #ifdef BME_ 
     bool bme280=bme.begin(0x76);
+    delay(100);
     if (!bme280){
        #ifdef printMode
           Serial.println(F("Failed to initiate bme280"));
        #endif
     }
   #endif
-    #ifdef DHT_
+  #ifdef DHT_
     dht.begin();
     delay(100);
   #endif
@@ -1939,6 +2229,14 @@ void setupSensors(){             // Wake up the MCP9808 if it was sleeping
       #endif  
     } 
   #endif
+  #ifdef SHT20_
+    sht20.initSHT20();
+    delay(100);
+    //Status: End of battery, Heater enabled, Disable OTP reload result: no,no,yes
+    #ifdef testMode
+      sht20.checkSHT20();
+    #endif  
+  #endif   
 }
 
 //*********************************
@@ -1988,6 +2286,35 @@ int setupSimModule() {
   }
   return(0);
 }
+
+//*********************************
+void setupWakeupConditions(){
+  //set wakeup conditions based on door & PIR sensor
+  #ifdef printMode
+    Serial.println(F("*setupWakeupConditions*"));
+    Serial.print(F("door = "));Serial.print(sensorData.door);
+    Serial.print(F("; pir = "));Serial.println(sensorData.pir);
+  #endif 
+
+  //Set up door causes wakeup when opened or closeed
+  if(doors[sensorID]==1){
+    //if(sensorData.door==0){  //processed door = 1 when raw data dooor = 0
+    //if(platform[sensorID].door==0){ 
+    if (digitalRead(pinDoor)==1){
+      esp_sleep_enable_ext0_wakeup(GPIO_NUM_35,0); //0 = High OPEN 1 = Low CLOSED
+      //esp_sleep_enable_ext0_wakeup(pinDoor,1); 
+    }else{
+      esp_sleep_enable_ext0_wakeup(GPIO_NUM_35,1);  
+    } 
+  }  
+
+  //set up pir causes wakeup when movement detected
+  if(pirs[sensorID]==1){
+    #define wakeupBitmask 0x4000000000  //pir gpio 39
+    esp_sleep_enable_ext1_wakeup(wakeupBitmask,ESP_EXT1_WAKEUP_ANY_HIGH);
+  }  
+}      
+
 //***********************************
 int setupWifi(uint8_t i){
   #ifdef WIFI  

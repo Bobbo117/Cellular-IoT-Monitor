@@ -10,7 +10,7 @@ An inexpensive IoT SIM card gains access to the cloud via a cellular connection.
 
 The HUB can operate as a stand-alone unit with its own sensors.
 
-Alternatively, the HUB can collect data wirelessly from up to three separate local sensor platforms.
+Alternatively, the HUB can collect data wirelessly from separate sensor platforms.
 
 The hub software - **AmbientHUB** - and 
 the sensor software - **AmbientAP** - 
