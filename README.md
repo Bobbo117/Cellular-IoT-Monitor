@@ -97,7 +97,8 @@ immediate alerts when sensors cross adaptive thresholds.
 -   An ESP32 or a D1 Mini 8266 micro-controller
     https://www.amazon.com/MELIFE-Development-Dual-Mode-Microcontroller-Integrated/dp/B07Q576VWZ?th=1
 
--   A `BME-280`, an MCP9808, or a `DHTxx` temperature / humidity sensor
+-   temperature / humidity sensors
+   `BME-280`, MCP9808, `DHTxx`, AHT10, SHT20
 
 -   An optional `SSD1306` OLED display 
 
