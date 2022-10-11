@@ -1,7 +1,12 @@
 
 const char* APP = "AmbientHUB ";
-const char* VERSION = "2022 v8.31";
+const char* VERSION = "2022 v10.11";
 
+/* 0901: statusDisplay bootCount
+ *   03: touchpin 32 for h2o 
+ *   21: Implement AHT10 sensor
+ *   30; Reset only if wakeup id =2 timer
+ */
 /*////////////////////////////////////////////////////////////////////////////////////
 
 I HOPE THIS SOFTWARE IS USEFUL TO YOU. 
@@ -65,11 +70,11 @@ The code within the '#ifdef ESPNOW to #endif compiler directives is adapted from
 //
 //        2. IF using LillyGo SIM7000G, select ESP32 Wrover Module, remove on board SD card for software upload
 //        
-//        3. Be sure to include all libraries shown in #include statements below. 
+//        3. Be sure to include all libraries shown in active #include statements below. 
 //           <xxx> are searched in library directories, "xxx" are searched in sketch local directory
 //        
 //        4. ESP LED states for debug/verification purposes:
-//           -->Blinks 5 seconds at reboot or first time startup
+//           -->Blinks 5 seconds at first time startup
 //           -->ON at setup WiFi with a sensor
 //           --OFF at kill WiFi with a ssensor
    
@@ -138,6 +143,8 @@ The code within the '#ifdef ESPNOW to #endif compiler directives is adapted from
   const long serialMonitorSeconds = 5*60; // interval in seconds to refresh serial monitor sensor readings (enhances readability)            
   const long samplingRateSeconds = 10;    // interval in seconds between sensor readings in alertMode
 
+  #define bootResetCount 24         //reset once per day
+
   //*****************
   // 3. Assign a short prefix to the data being sent to the cloud 
   // to identify the source especially if you have more then one
@@ -165,7 +172,7 @@ The code within the '#ifdef ESPNOW to #endif compiler directives is adapted from
   //*****************
   // 6. Select one HUB temp sensor if using a HUB temp sensor:
   //****************
-  
+  //#define AHT10_        // Adafruit AHT10  
   #define BME_        // BME280 temperature, humidity, pressure sensor
   //#define DHT_      // DHT11,21,22, etc. temperature, humidity sensors
   //#define MCP9808_  // botletics shield temperature sensor
@@ -181,7 +188,7 @@ The code within the '#ifdef ESPNOW to #endif compiler directives is adapted from
   // arrays to indicate types of sensors aboard each sensor platform (1=presnt, 0 = absent)
   // HUB  sensorID=0; boards are 1,2,3.. example: temps[]={1,0,1,0} indicates hub and sensor #2 have temp sensors, sensor #1 and #3 do not.
   uint8_t temps[] = {1,1,1,1}, hums[]={1,1,1,1}, dbms[]={1,0,0,0}, pres[]={0,0,0,0}, bat[]={1,0,0,0};
-  uint8_t luxs[] = {0,1,1,1}, h2os[] = {0,1,1,0},doors[]={0,0,1,1},pirs[]={0,0,1,0};
+  uint8_t luxs[] = {0,1,0,1}, h2os[] = {0,1,0,0},doors[]={0,0,1,1},pirs[]={0,1,0,1};
 
   //*****************
   // 8. platform sensor data structure
@@ -201,6 +208,7 @@ The code within the '#ifdef ESPNOW to #endif compiler directives is adapted from
   
   platforms sensorData = {0,0,0,0,0,0,0,0,0}; // Creates a structure called sensorData to receive data from sensor platforms
   RTC_DATA_ATTR platforms platform[numberOfPlatforms]; //stores the reaadings persistently in an array of structures
+  uint8_t aH2oMeasured = 0; // sensor measurement prior to preocessing
   RTC_DATA_ATTR uint8_t priorDoor = 0; //last door status = 0 (closed) or 1 (open)
   RTC_DATA_ATTR int dbm[] = {-99,0,0,0};      //hub signal strenth not included in the platform structure
   RTC_DATA_ATTR uint16_t vbat[] = {2500,0,0,0}; //hub battery voltage (mv) not included in the platform structure
@@ -343,6 +351,10 @@ The code within the '#ifdef ESPNOW to #endif compiler directives is adapted from
 
   #include <Wire.h>                 // 12C
   #include <Adafruit_Sensor.h>
+  #ifdef AHT10_
+    #include <Adafruit_AHT10.h>
+    Adafruit_AHT10 aht;
+  #endif
   #ifdef BME_
     #include <Adafruit_BME280.h>    // library for BME280 temp hum pressure sensor
     Adafruit_BME280 bme;            // temp hum pressure sensor
@@ -465,8 +477,9 @@ void setup() {
    setupPinModes();                 // Set Pin Modes INPUT / OUTPUT (necessary to turn board LED on, etc.) 
    initializeArrays();              // Initialize sensor threshholds etc.
    wakeupID = readWakeupID();       //process wakeup sources & return wakeup indicator
+   restartIfTime();              //restart ea bootcount>bootResetCount if timer wakeup else increment bootCount 
    setupOledDisplay(); 
-   displayVersion();                //display version and blink onboard led 5 sec on bootCount=0
+   displayVersion();                //display version and blink onboard led 5 sec on bootCount=1
    turnOnBoardLED();   
    for (uint8_t i=0; i< numberOfPlatforms; i++){  // for each sensor:
       displayStatus(i);             // update OLED display with new or prior readings      
@@ -475,12 +488,12 @@ void setup() {
    //attachInterrupt(digitalPinToInterrupt(pinPir), pirInterrupt, RISING);  //in case you want to try it!
    //attachInterrupt(digitalPinToInterrupt(pinDoor), doorChangeInterrupt, CHANGE); //in case you want to try it!
    setupSensors();                  // Wake up the HUB temp sensors 
-   if (bootCount ==0){              // if first boot or restart (not wakeup)
+   if (bootCount ==1){              // if first boot or restart (not wakeup)
      runSelfTest();                 //power SIM on/off, test Cellular network if testCellular enabled 
    }  
    setupEspNow();                   // initialize communication with with external sensor platforms if enabled
    setupMQTT_Subscribe();           // setup if adaMQTT_Subscribe enabled
-   bootCount++;                     // increment boot counter
+//   bootCount++;                     // increment boot counter
    turnOffBoardLED();
 }
 
@@ -789,7 +802,7 @@ static int displayTimeIsUp(long msec){    //Read data at timed intervals
 //*********************************
 void displayVersion(){  
   //display version and blink onboard led 5 sec
-  if (bootCount ==0) {
+  if (bootCount ==1) {
     #ifdef OLED_
       //char buf0[6],buf1[6];
       oled.clear(); 
@@ -924,10 +937,10 @@ void formatData(){
       strcat(buf,separator);
       dtostrf(platform[i].aH2o, 1, 0, buf2); 
       strcat(buf, buf2);
-      strcpy(separator,comma);
-      strcat(buf,",");
-      dtostrf(platform[i].dH2o, 1, 0, buf2); 
-      strcat(buf, buf2);
+      //strcpy(separator,comma);
+      //strcat(buf,",");
+      //dtostrf(platform[i].dH2o, 1, 0, buf2); 
+      //strcat(buf, buf2);
     }
   }
 
@@ -1657,7 +1670,12 @@ void readAh2o(){
     //Serial.println(F("*readAh2o*"));
   #endif  
   if(h2os[sensorID]==1){
-    platform[sensorID].aH2o = 2.44*(4095-analogRead(pinAh2o))/100;   //whole number 1-99 %
+    //sensorData.aH2o = 2.44*(4095-analogRead(pinAh2o))/100;   //whole number 1-99 %
+    aH2oMeasured =  touchRead(pinAh2o);
+    if(aH2oMeasured > 5){
+      aH2oMeasured = 5;  
+    }
+    sensorData.aH2o = 5 - aH2oMeasured;
   }  
 }
 
@@ -1781,15 +1799,32 @@ uint8_t readSensorData(uint8_t i){             // temp & voltage
       platform[i].temperature = x;
       delay(500);
     #endif
-  
+
+    #ifdef AHT10_
+      sensors_event_t humidity, temp;
+      aht.getEvent(&humidity, &temp);// populate temp and humidity objects with fresh data
+      //Serial.print("Temperature: "); Serial.print(temp.temperature); Serial.println(" degrees C");
+      //Serial.print("Humidity: "); Serial.print(humidity.relative_humidity); Serial.println("% rH");
+      float x=temp.temperature;
+      x=1.8*x+32.0;
+      if (isnan(x)){
+        returnFlag=0;         //causes ? on OLED
+        x=platform[i].temperature;
+      }
+      platform[i].temperature = x;
+
+      x=humidity.relative_humidity;
+      if (isnan(x)){
+        x=platform[i].humidity;
+      }
+      platform[i].humidity=x;      
+    #endif 
     #ifdef BME_
       float x = 1.8*bme.readTemperature()+32.0;
       if (isnan(x)){
         returnFlag=0;         //causes ? on OLED
-        //x=temperature[i];
         x=platform[i].temperature;
       }
-      //temperature[i]=x;
       platform[i].temperature = x;
   
       x = (bme.readHumidity());  
@@ -1976,6 +2011,24 @@ uint8_t readWakeupID(){
   }    
 }
 
+//***********************************
+  void restartIfTime(){
+  #ifdef printMode 
+    Serial.print(F("*restartIfTime* bootCount = "));Serial.println(bootCount);
+  #endif     
+  if (bootCount>=bootResetCount){
+    if (wakeupID==2){
+      //if(sensorData.pir<=3){
+        #ifdef printMode
+          Serial.println("");delay (5000);
+          Serial.println(F("Rebooting.............*************.............")); 
+        #endif
+        ESP.restart();  //Reboot the esp32 to prevent memory issues
+      //} 
+    }
+  }      
+  bootCount++;
+}  
 //*************************************
 void runSelfTest(){                 //pwr SIM on/off, test Cellular network if testCellular enabled 
    #ifdef cellularMode              // If cellular comms is enabled
@@ -2209,6 +2262,10 @@ void setupSensors(){             // Wake up the MCP9808 if it was sleeping
   #ifdef printMode
      Serial.println(F("*WakeUpSensors*"));
   #endif
+  #ifdef AHT10_
+    aht.begin();
+    delay(100);
+  #endif 
   #ifdef BME_ 
     bool bme280=bme.begin(0x76);
     delay(100);
@@ -2291,18 +2348,15 @@ int setupSimModule() {
 void setupWakeupConditions(){
   //set wakeup conditions based on door & PIR sensor
   #ifdef printMode
-    Serial.println(F("*setupWakeupConditions*"));
-    Serial.print(F("door = "));Serial.print(sensorData.door);
+    Serial.print(F("*setupWakeupConditions*"));
+    Serial.print(F(" door = "));Serial.print(sensorData.door);
     Serial.print(F("; pir = "));Serial.println(sensorData.pir);
   #endif 
 
   //Set up door causes wakeup when opened or closeed
   if(doors[sensorID]==1){
-    //if(sensorData.door==0){  //processed door = 1 when raw data dooor = 0
-    //if(platform[sensorID].door==0){ 
     if (digitalRead(pinDoor)==1){
       esp_sleep_enable_ext0_wakeup(GPIO_NUM_35,0); //0 = High OPEN 1 = Low CLOSED
-      //esp_sleep_enable_ext0_wakeup(pinDoor,1); 
     }else{
       esp_sleep_enable_ext0_wakeup(GPIO_NUM_35,1);  
     } 

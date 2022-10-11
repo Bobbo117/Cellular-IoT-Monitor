@@ -1,7 +1,12 @@
 
 const char* APP = "AmbientAP ";
-const char* VERSION = "2022 v8.31";
+const char* VERSION = "2022 v10.11";
 
+/* 0901: statusDisplay bootCount
+ *   03: touchpin 32 for h2o 
+ *   21: Implement AHT10 sensor
+ *   30; Reset only if wakeup id =2 timer
+ */
 /*////////////////////////////////////////////////////////////////////////////////////
 
 I HOPE THIS SOFTWARE IS USEFUL TO YOU. 
@@ -76,7 +81,8 @@ NOTES -  1. IF using MELife for ESP32 ESP-32S Development Board, use Arduino IDE
   #define OLED_               //option: comment out if no oled display 128x64
   //#define oledFormat1       // displays only temp humidity pressure on OLED display
   #define oledFormat2         // displays all sensors on OLED display
-  #define h2oThreshhold  10   // wet - dry threshhold % for OLED display
+  //#define h2oThreshhold  10   // wet - dry threshhold % for OLED display
+  #define h2oThreshhold  1   // wet - dry threshhold % for OLED display
 
   //*****************                                                                                    //*****************
   // 2. Timing Parameters
@@ -101,9 +107,10 @@ NOTES -  1. IF using MELife for ESP32 ESP-32S Development Board, use Arduino IDE
   //*****************
   // 4. Select one platform temperature sensor:
   //****************
+ // #define AHT10_        // Adafruit AHT10
   //#define BME_          // BME280
-  //#define DHT_            // DHT11,21,22, etc.
-  #define SHT20_        // DFRobot SHT20
+  #define DHT_            // DHT11,21,22, etc.
+  //#define SHT20_        // DFRobot SHT20
   
   //*****************
   // 5. Select one of the 3 following protocols for communication between HUB and sensor platforms; 
@@ -156,9 +163,11 @@ NOTES -  1. IF using MELife for ESP32 ESP-32S Development Board, use Arduino IDE
                                         //  pinDoor = 1 = closed, 0 = open.
                                         //NOTE if this pin is changed, 
                                         //  change setupWakeupConditions as well.
-    #define pinDh2o 18                 //digital moisture digital indicater *                         
-    #define pinAh2o 36                 //analog moisture analog measure *
+    //#define pinDh2o 18                 //digital moisture digital indicater *                         
+    //#define pinAh2o 36                 //analog moisture analog measure *
                                         //   * Hiletgo LM393 FC37 moisture monitor
+                                        
+    #define pinAh2o 32                  // touchpin                                
     #define pinPhotoCell 34             // analog input 
                                         // esp32 analog input; photocell connected to GPIO pin & gnd, 
                                         // 10K pullup resister, i.e., connected to GPIO pin & 3.3v
@@ -180,6 +189,10 @@ NOTES -  1. IF using MELife for ESP32 ESP-32S Development Board, use Arduino IDE
   //*****************
   // 9. Temp Sensor Libraries
   //*****************
+  #ifdef AHT10_
+    #include <Adafruit_AHT10.h>
+    Adafruit_AHT10 aht;
+  #endif
   #ifdef DHT_
     #include <Adafruit_Sensor.h>
     #define pinDHT 5                 
@@ -201,25 +214,29 @@ NOTES -  1. IF using MELife for ESP32 ESP-32S Development Board, use Arduino IDE
   //  10. Each sensor board needs unique display title and ssid; 
   //  uncomment one triplet and comment // the others:
   //*****************
-  //uint8_t sensorID = 1;
-  //#define displayTitle " ~AMBIENT 1~"  
-  //const char* ssid = "AMBIENT_1";
-  
+ // 
+ 
+  uint8_t sensorID = 1;
+  #define displayTitle " ~AMBIENT 1~"  
+  const char* ssid = "AMBIENT_1";
+  //
+
+/*   
   uint8_t sensorID = 2;    
   #define displayTitle " ~AMBIENT 2~"
   const char* ssid = "AMBIENT_2";
   
-  //uint8_t sensorID = 3;
-  //#define displayTitle " ~AMBIENT 3~"
-  //const char* ssid = "AMBIENT_3";
-
+  uint8_t sensorID = 3;
+  #define displayTitle " ~AMBIENT 3~"
+  const char* ssid = "AMBIENT_3";
+*/
   //*****************
   //  11. sensor inventory for each platform
   //*****************
   // arrays to indicate types of sensors aboard each sensor platform (1=presnt, 0 = absent)
   // HUB  id=0; boards are 1,2,3.. example: temps[]={1,0,1,0} indicates hub and sensor #2 have temp sensors, sensor #1 and #3 do not.
   uint8_t temps[] = {1,1,1,1}, hums[]={1,1,1,1}, dbms[]={1,0,0,0}, press[]={0,0,0,0}, bat[]={1,0,0,0};
-  uint8_t luxs[] = {1,1,1,1}, h2os[] = {0,1,1,0},doors[]={1,0,1,3},pirs[]={1,0,1,0};
+  uint8_t luxs[] = {0,1,0,1}, h2os[] = {0,1,0,0},doors[]={0,0,1,1},pirs[]={0,1,0,1};
 
 ////////////////////////////////////////////////////////////////////////////
 //*********            End of Compile-time Options           ***************
@@ -250,8 +267,9 @@ NOTES -  1. IF using MELife for ESP32 ESP-32S Development Board, use Arduino IDE
   #ifdef ESP8266
     platforms sensorData = {sensorID,0,0,0,0,0,0,0,0};   to initialize  
   #endif  
+  uint8_t aH2oMeasured = 0; // sensor measurement prior to preocessing
   RTC_DATA_ATTR uint8_t priorDoor = 77; //last door status = 0 (closed) or 1 (open)
-  String hum="--",temp="--",pres="--"; //adjusted values sent to hub if wifi used: "--" if nan or current reading if valid
+  String hum="--",tem="--",pres="--"; //adjusted values sent to hub if wifi used: "--" if nan or current reading if valid
   //String payload ="11,22,3333,4,55,66,77,----"; future plan
 
   //*****************
@@ -338,13 +356,13 @@ NOTES -  1. IF using MELife for ESP32 ESP-32S Development Board, use Arduino IDE
 void setup(){
   //Read sensors, 1) setup wifi server OR 2) transmit data using ESPNOW and go to sleep in less than 2 sec!
   delay(200);                   //ESP32 Bug workaround -- don't reference rtc ram too soon!!
+  serialPrintVersion();         //Show startup info to serial monitor if printMode enabled
   setupPinModes();
   wakeupID = readWakeupID();    //process wakeup sources & return wakeup indicator
+  restartIfTime();              //restart ea bootcount>bootResetCount if timer wakeup else increment bootCount 
   setupOledDisplay();           //prepare the oled display if #define includeOled is enabled
-  displayVersion();             //display version and blink onboard led 5 sec on bootCount=0
-  turnOnBoardLED(); 
-  serialPrintVersion();         //Show startup info to serial monitor if printMode enabled
-  restartIfTime();              //restart ea 24 hrs and reset bootcount=0 else increment bootCount 
+  displayVersion();             //display version and blink onboard led 5 sec on bootCount=1
+  turnOnBoardLED();             //illuminate the on-board LED
   //attachInterrupt(digitalPinToInterrupt(pinPir), pirInterrupt, RISING);  //in case you want to try it!
   //attachInterrupt(digitalPinToInterrupt(pinDoor), doorChangeInterrupt, CHANGE); //in case you want to try it!
   setupSensors();               //initialize sensors 
@@ -439,32 +457,41 @@ void displayStatus(){
   #endif  
   #ifdef OLED_
     char buf0[6],buf1[6];
-    oled.clear(); 
-    oled.setFont(fixed_bold10x15);
+    //oled.clear(); 
+  oled.setFont(fixed_bold10x15);
+oled.setCursor(0,0); 
     oled.println(displayTitle);       //top line is display title
     #ifdef oledFormat1
-      oled.print("  ");oled.print(sensorData.temperature);oled.println(" F");
-      oled.print("  ");oled.print(sensorData.humidity);oled.println(" %");
-      oled.print("  ");oled.print(sensorData.pressure);oled.println("mb"); 
+      oled.print("  ");oled.print(sensorData.temperature);oled.println(" F    ");
+      oled.print("  ");oled.print(sensorData.humidity);oled.println(" %    ");
+      oled.print("  ");oled.print(sensorData.pressure);oled.println("mb    "); 
     #endif
-    #ifdef oledFormat2 
+    #ifdef oledFormat2
+
       int iTemperature=sensorData.temperature + .5;
       oled.print(iTemperature);
       #ifdef printMode
-        Serial.print(" temp, Temperature: ");Serial.print(temp);Serial.print(", ");Serial.print(iTemperature);Serial.println(" *F");
+        Serial.print(" tem, Temperature: ");Serial.print(tem);Serial.print(", ");Serial.print(iTemperature);Serial.println(" *F");
       #endif 
-      if(temp=="--"){
-        oled.print (" F?   ");
+      if(tem=="--"){
+        oled.print (" F?");
       }else{ 
-      oled.print(" F    ");
+        oled.print(" F ");
       }
+
+      #ifdef printMode
+        oled.print(bootCount);  //0901: to make sure add is rebooting
+        oled.print(" ");
+      #else
+        oled.print("  ");
+      #endif
       
       int iHumidity=sensorData.humidity +.5;
       oled.print(iHumidity);
       if(hum=="--"){
-        oled.print ("?");
+        oled.println("?    ");
       }else{
-        oled.println("%");
+        oled.println("%    ");
       }
       #ifdef printMode
         Serial.print(" hum, Humidity: ");Serial.print(hum);Serial.print(F(", "));Serial.print(iHumidity);Serial.println(F("%"));
@@ -476,25 +503,27 @@ void displayStatus(){
            Serial.print(" lux: ");Serial.println(sensorData.lux);
         #endif  
         oled.print(sensorData.lux);
-        oled.println("%");
+        oled.println("%      ");
       }  
     
       if(h2os[sensorID]==1){
         if(sensorData.aH2o - h2oThreshhold > 0){  //display leak status in real time
-          oled.print("WET ");
+          oled.print("WET");
+          oled.print(aH2oMeasured);
           #ifdef printMode
             Serial.println(" FLOOR aH2o WET");
           #endif  
         }else{
-          oled.print("DRY ");
+          oled.print("DRY");
+          oled.print(aH2oMeasured);
           #ifdef printMode
-            Serial.println(" FLOOR aH2o DRY");
+            Serial.print(" FLOOR aH2o DRY; aH2oMeasured = ");Serial.println(aH2oMeasured);
           #endif  
         }
       }
       
       if(pirs[sensorID]==1){
-          oled.print("m");
+          oled.print(" m");
           oled.print(sensorData.pir);
           #ifdef printMode
             Serial.print(" MOTION = "); Serial.println(sensorData.pir);
@@ -513,9 +542,10 @@ void displayStatus(){
             Serial.println(" DOOR OPEN");
           #endif  
         }
-        oled.println(sensorData.door);
+        oled.print(sensorData.door);
       }
-    #endif  
+    #endif
+    oled.println("  ");  
   #endif    //OLED_
 }
 
@@ -534,7 +564,7 @@ static int displayTimeIsUp(long msec){    //Read data at timed intervals
 //*********************************
 void displayVersion(){  
   //display version and blink onboard led 5 sec
-  if (bootCount ==0) {
+  if (bootCount ==1) {
     #ifdef OLED_
       //char buf0[6],buf1[6];
       oled.clear(); 
@@ -563,12 +593,12 @@ void displayVersion(){
         sensorData.door = 0;
         priorDoor = 0;
         sensorData.pir = 0;   
-        displayStatus();     
+        //displayStatus();     
         setupWakeupConditions();
         #ifdef printMode
           Serial.print(F(" sleeping "));Serial.print(sleepSeconds);Serial.println(F(" seconds..zzzz"));
         #endif 
-        displayStatus;
+ //displayStatus;
         ESP.deepSleep(sleepSeconds * uS_TO_S_FACTOR);
       }  
     }else{
@@ -625,10 +655,10 @@ String getTemperature() {
   //http GET retrieves latest valid reading
   #ifdef printMode
     Serial.println(F("*getTemperature*"));
-    Serial.println(temp);
+    Serial.println(tem);
   #endif  
   turnOnBoardLED();  
-  return temp;
+  return tem;
 }
 
 //***********************************
@@ -714,10 +744,15 @@ void readAh2o(){
     Serial.print(F("*readAh2o* "));
   #endif  
   if(h2os[sensorID]==1){
-    sensorData.aH2o = 2.44*(4095-analogRead(pinAh2o))/100;   //whole number 1-99 %
+    //sensorData.aH2o = 2.44*(4095-analogRead(pinAh2o))/100;   //whole number 1-99 %
+    aH2oMeasured =  touchRead(pinAh2o);
+    if(aH2oMeasured > 5){
+      aH2oMeasured = 5;  
+    }
+    sensorData.aH2o = 5 - aH2oMeasured;
   }  
   #ifdef printMode
-    Serial.print(sensorData.aH2o);Serial.println(F("% "));
+    Serial.println(sensorData.aH2o);//Serial.println(F("% "));
   #endif
 }
 
@@ -729,7 +764,7 @@ void readDh2o(){
   if(h2os[sensorID]==1){
     //sensor reads 1 when dry, 0 when wet
     //we want 0=dry (normal status)
-    sensorData.dH2o = !digitalRead(pinDh2o);
+    //sensorData.dH2o = !digitalRead(pinDh2o);
   }  
   #ifdef printMode
     Serial.println(sensorData.dH2o);
@@ -767,6 +802,11 @@ void readHumidity() {
     Serial.print(F("*readHumidity* "));
   #endif  
   float x=0;
+  #ifdef AHT10_
+    sensors_event_t humidity, temp;
+    aht.getEvent(&humidity, &temp);// populate temp and humidity objects with fresh data
+    x=humidity.relative_humidity;  
+  #endif  
   #ifdef DHT_
     x = (dht.readHumidity());
   #endif
@@ -843,6 +883,14 @@ void readTemperature() {
     Serial.print(F("*readTemperature* "));
   #endif 
   float x = 0; 
+  #ifdef AHT10_
+    sensors_event_t humidity, temp;
+    aht.getEvent(&humidity, &temp);// populate temp and humidity objects with fresh data
+    //Serial.print("Temperature: "); Serial.print(temp.temperature); Serial.println(" degrees C");
+    //Serial.print("Humidity: "); Serial.print(humidity.relative_humidity); Serial.println("% rH");
+    x=temp.temperature;
+    x=1.8*x+32.0;
+  #endif 
   #ifdef DHT_
     x=dht.readTemperature(true);  //true = *F
   #endif
@@ -852,13 +900,13 @@ void readTemperature() {
   #ifdef SHT20_
     x = 1.8*sht20.readTemperature()+32.0;
   #endif
-  temp=String(x);
-  if (temp=="nan"){temp = "--";
-     }else{sensorData.temperature = x;
+  tem=String(x);
+  if (tem=="nan"){tem = "--";
+  }else{sensorData.temperature = x;
   }
-  
+
   #ifdef printMode 
-     Serial.print(F("temperature, temp: "));Serial.print(sensorData.temperature);Serial.print(F(", "));Serial.println(temp);
+    Serial.print(F("temperature, tem: "));Serial.print(sensorData.temperature);Serial.print(F(", "));Serial.println(tem);
   #endif    
 }
 
@@ -892,13 +940,23 @@ uint8_t readWakeupID(){
 
 //***********************************
   void restartIfTime(){
-  if (bootCount>=bootResetCount){
-    #ifdef printMode
-      Serial.println("");delay (5000);
-      Serial.println(F("Rebooting.............*************.............")); 
-    #endif
-    ESP.restart();  //Reboot the esp32 to prevent memory issues
-  }   
+  #ifdef printMode 
+    Serial.print(F("*restartIfTime* bootCount = "));Serial.print(bootCount);Serial.print(F(" \t\pir = "));
+    Serial.println(sensorData.pir);  
+  #endif     
+  if (bootCount>=bootResetCount){  //if bootCount meets threshhold AND:
+    if (wakeupID==2){               //timer caused wakeup
+      if(sensorData.pir<=3){        //no unreported pir data(allowing for a couple false hits)
+        if(sensorData.door==0){     //no unreported door data
+          #ifdef printMode
+            Serial.println("");delay (5000);
+            Serial.println(F("Rebooting.............*************.............")); 
+          #endif                    
+          ESP.restart();            //Reboot the esp32 to prevent memory issues
+        }  
+      } 
+    }
+  }      
   bootCount++;
 }  
 //***********************************
@@ -1081,12 +1139,14 @@ void setupOledDisplay(){
     Serial.println(F("*setupOledDisplay*"));
   #endif
   #ifdef OLED_
-    Wire.begin();  
-    #if OLED_RESET  >= 0
-      oled.begin(&Adafruit128x64, I2C_ADDRESS, OLED_RESET);
-    #else 
-      oled.begin(&Adafruit128x64, I2C_ADDRESS);
-    #endif 
+    //if(bootCount==0){  //only initialize on restart so OLED doesnt CLEAAR
+      Wire.begin();  
+      #if OLED_RESET  >= 0
+        oled.begin(&Adafruit128x64, I2C_ADDRESS, OLED_RESET);
+      #else 
+        oled.begin(&Adafruit128x64, I2C_ADDRESS);
+      #endif
+   // } 
   #endif 
 }
 
@@ -1106,6 +1166,7 @@ void setupPinModes(){
   if (luxs[sensorID]==1){
     pinMode (pinPhotoCell, INPUT);
   }  
+/*  
   if (h2os[sensorID]==1){  
     #ifdef ESP32
       pinMode (pinAh2o, INPUT);
@@ -1114,7 +1175,8 @@ void setupPinModes(){
     #ifdef ESP8266
       pinMode (pinDh2o, INPUT);
     #endif  
-  }  
+  }
+*/    
 }
 
 //*********************************
@@ -1123,6 +1185,10 @@ void setupSensors(){
   #ifdef printMode
     Serial.println(F("*setupSensors*"));
   #endif  
+  #ifdef AHT10_
+    aht.begin();
+    delay(100);
+  #endif 
   #ifdef BME_
     #define SEALEVELPRESSURE_HPA (1013.25)
     bool bme280=bme.begin(0x76);
@@ -1164,8 +1230,8 @@ void setupWakeupConditions(){
   #endif 
 
   //Set up door causes wakeup when opened or closeed
-  if(doors[sensorID]==1){
-    if (digitalRead(pinDoor)==1){
+  if(doors[sensorID]==1){          //if this sensor platform has a door sensor:
+    if (digitalRead(pinDoor)==1){  //determine wakeup condition based on door closed or open
       esp_sleep_enable_ext0_wakeup(GPIO_NUM_35,0); //0 = High OPEN 1 = Low CLOSED
      }else{
       esp_sleep_enable_ext0_wakeup(GPIO_NUM_35,1);  
@@ -1173,8 +1239,8 @@ void setupWakeupConditions(){
   }  
 
   //set up pir causes wakeup when movement detected
-  if(pirs[sensorID]==1){
-    #define wakeupBitmask 0x4000000000  //pir gpio 39
+  if(pirs[sensorID]==1){                //if this sensor platform has a pir sensor:
+    #define wakeupBitmask 0x4000000000  //wakeup on pir gpio 39
     esp_sleep_enable_ext1_wakeup(wakeupBitmask,ESP_EXT1_WAKEUP_ANY_HIGH);
   }  
 }      
@@ -1234,7 +1300,7 @@ void setupWifiServer(){
 //*************************************
 void turnOnBoardLED(){              
   // Turn Board LED on
-  #ifdef printMode
+  #ifdef testMode
     Serial.println(F("*turnOnBoardLED*"));
   #endif    
   #ifdef ESP8266
@@ -1248,7 +1314,7 @@ void turnOnBoardLED(){
 //*********************************    
 void turnOffBoardLED(){             
   // Turn board LED off
-  #ifdef printMode
+  #ifdef testMode
     Serial.println(F("*turnOffBoardLED*"));
   #endif  
   #ifdef ESP8266
