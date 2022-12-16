@@ -1,59 +1,29 @@
 
 const char* APP = "AmbientAP ";
-const char* VERSION = "2022 v10.11";
+const char* VERSION = "2022 v12.15";
 
-/* 0901: statusDisplay bootCount
- *   03: touchpin 32 for h2o 
- *   21: Implement AHT10 sensor
- *   30; Reset only if wakeup id =2 timer
- */
+/////////////////////////////////////////////////////////////////////////////////////
+//
+// AmbientAP is a flexible, multi-featured sensor platform.  It can:
+//  1. expose sensor values via http GET command requests from a client.
+//  2. expose sensor values via lighter footprint ESPNOW protocol which pushes data to a peer/client periodically without receiving a request.
+//  3. operate on ESP32 or ESP8266 (including d1 mini) controller.
+//  4. accommodate a multitude of temperature/humidity/pressure sesors.
+//  5. report to 1 ESPNOW peer or up to 4 peers.
+//  6. sleep and wake up via a timer, an interrupt (such as a window being opened), or it can stay awake.
+//  7. sleep immediately after sending a successfully received ESPNOW message when configured as a 1to1 peer.
+//  8. operate with or without an OLED display.
+//  9. operate as one of three such devices using this software by assigning unique SensorID 1, 2, or 3 to each sensor platform.
+//
 /*////////////////////////////////////////////////////////////////////////////////////
 
-I HOPE THIS SOFTWARE IS USEFUL TO YOU. 
+  Copyright 2022 Bob Jessup  MIT License:
+  https://github.com/Bobbo117/Cellular-IoT-Monitor/blob/main/LICENSE
 
-Copyright 2022 Robert Jessup  MIT License
-
-Permission is hereby granted, free of charge, to any person obtaining a copy of this software 
-and associated documentation files (the "Software"), to deal in the Software without restriction, 
-including without limitation the rights to use, copy, modify, merge, publish, distribute, 
-sublicense, and/or sell copies of the Software, and to permit persons to whom the Software 
-is furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all copies 
-or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, 
-INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR 
-PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE 
-FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, 
-TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE 
-OR THE USE OR OTHER DEALINGS IN THE SOFTWARE
-*/////////////////////////////////////////////////////////////////////////////////////
-
-/*//////////////////////////////////////////////////////////////////////////////////// 
-The code within the '#ifdef ESPNOW_1to1' and '#ifdef ESPNOW_1toN' to #endif 
-compiler directives is adapted from the following:
-    Rui Santos
-    Complete project details at https://RandomNerdTutorials.com/esp-now-one-to-many-esp32-esp8266/
-    
-    Permission is hereby granted, free of charge, to any person obtaining a copy
-    of this software and associated documentation files.
-    
-    The above copyright notice and this permission notice shall be included in all
-    copies or substantial portions of the Software.
-*////////////////////////////////////////////////////////////////////////////////////
-
-/************************************************************************************
-AmbientAP is a flexible, multi-featured sensor platform.  It can:
-  1. expose sensor values via http GET command requests from a client.
-  2. expose sensor values via lighter footprint ESPNOW protocol which pushes data to a peer/client periodically without receiving a request.
-  3. operate on ESP32 or ESP8266 (including d1 mini) controller.
-  4. accommodate BME280 (via I2C) or dht sensors (via pin 5).
-  5. report to 1 ESPNOW peer or up to 4 peers.
-  6. sleep and wake up via a timer, an interrupt (such as a window being opened), or it can stay awake.
-  7. sleep immediately after sending a successfully received ESPNOW message when configured as a 1to1 peer.
-  8. operate with or without an OLED display.
-  9. operate as one of three such devices using this software by assigning unique SensorID 1, 2, or 3 to each sensor platform.
+  Certain code within the #ifdef ESPNOW compiler directives is adapted from the following:
+  https://RandomNerdTutorials.com/esp-now-one-to-many-esp32-esp8266/
+   
+*////////////////////////////////////////////////////////////////////////////
 
 NOTES -  1. IF using MELife for ESP32 ESP-32S Development Board, use Arduino IDE "esp32 Dev Module" or "MH ET LIVE ESP32 Devkit"
          2. IF using d1 Mini 8266, use Arduino IDE "LOLIN(WEMOS) d1 R2 & Mini"
@@ -108,8 +78,8 @@ NOTES -  1. IF using MELife for ESP32 ESP-32S Development Board, use Arduino IDE
   // 4. Select one platform temperature sensor:
   //****************
  // #define AHT10_        // Adafruit AHT10
-  //#define BME_          // BME280
-  #define DHT_            // DHT11,21,22, etc.
+  #define BME_          // BME280
+  //#define DHT_            // DHT11,21,22, etc.
   //#define SHT20_        // DFRobot SHT20
   
   //*****************
@@ -124,8 +94,10 @@ NOTES -  1. IF using MELife for ESP32 ESP-32S Development Board, use Arduino IDE
   // if selecting ESPNOW_1to1 enter 1 MAC Address for hub; ESPNOW_1toN, enter 4 MAC addresses; 
   //******************
   #ifdef ESPNOW_1to1
-    uint8_t broadcastAddress[] = {0xAC, 0x67, 0xB2, 0x2B, 0x6D, 0x00};  //example for esp32 #7 MAC Address AC:67:B2:2B:6D:00
-                                                                         // lillygo 2: 40:91:51:30:62:94
+    //uint8_t broadcastAddress[] = {0xAC, 0x67, 0xB2, 0x2B, 0x6D, 0x00};  //example for esp32 #7 MAC Address AC:67:B2:2B:6D:00
+      uint8_t broadcastAddress[] = {0x8C, 0xAA, 0xB5, 0x85, 0x6A, 0x68};  //esp32 #12 Mac Address 8C:AA:B5:85:6A:68
+    // uint8_t broadcastAddress[] = {0xA8, 0x03, 0x2A, 0x74, 0xBE, 0x8C};  //LILLYGO MAC Address A8:03:2A:74:BE:8C
+    //uint8_t broadcastAddress[] = {0x40, 0x91, 0x51, 0x30, 0x62, 0x94};   // lillygo2: 40:91:51:30:62:94
   #endif
   #ifdef ESPNOW_1toN
     //comment these out and use your own AmbientHUB or other peer MAC addresses:
@@ -215,28 +187,29 @@ NOTES -  1. IF using MELife for ESP32 ESP-32S Development Board, use Arduino IDE
   //  uncomment one triplet and comment // the others:
   //*****************
  // 
- 
-  uint8_t sensorID = 1;
-  #define displayTitle " ~AMBIENT 1~"  
-  const char* ssid = "AMBIENT_1";
+/* FL garage or ME basement for me */
+  uint8_t sensorID = 2;
+  #define displayTitle " ~AMBIENT 2~"  
+  const char* ssid = "AMBIENT_2";
   //
-
-/*   
+//*/
+/* ME Bedroom or FL Lanai for me 
   uint8_t sensorID = 2;    
   #define displayTitle " ~AMBIENT 2~"
   const char* ssid = "AMBIENT_2";
-  
+ */ 
+ /* FL or ME Kitchen for me 
   uint8_t sensorID = 3;
   #define displayTitle " ~AMBIENT 3~"
   const char* ssid = "AMBIENT_3";
-*/
+//*/
   //*****************
   //  11. sensor inventory for each platform
   //*****************
   // arrays to indicate types of sensors aboard each sensor platform (1=presnt, 0 = absent)
   // HUB  id=0; boards are 1,2,3.. example: temps[]={1,0,1,0} indicates hub and sensor #2 have temp sensors, sensor #1 and #3 do not.
-  uint8_t temps[] = {1,1,1,1}, hums[]={1,1,1,1}, dbms[]={1,0,0,0}, press[]={0,0,0,0}, bat[]={1,0,0,0};
-  uint8_t luxs[] = {0,1,0,1}, h2os[] = {0,1,0,0},doors[]={0,0,1,1},pirs[]={0,1,0,1};
+  uint8_t temps[] = {1,1,1,1}, hums[]={1,1,1,1}, dbms[]={1,0,0,0}, press[]={0,1,1,0}, bat[]={1,0,0,0};
+  uint8_t luxs[] = {0,0,0,1}, h2os[] = {0,0,0,0},doors[]={0,1,1,0},pirs[]={1,1,0,0},sonics[]={1,0,0,0};
 
 ////////////////////////////////////////////////////////////////////////////
 //*********            End of Compile-time Options           ***************
@@ -245,7 +218,6 @@ NOTES -  1. IF using MELife for ESP32 ESP-32S Development Board, use Arduino IDE
   uint64_t uS_TO_S_FACTOR = 1000000;  // Conversion factor for micro seconds to seconds
   uint8_t wakeupID;                   //reason sensor wode up; see readWakeupID 
 
-  //*****************
   // Platform sensor structure
   // Structure to send data must match the receiver structure:
   //*****************
@@ -257,18 +229,20 @@ NOTES -  1. IF using MELife for ESP32 ESP-32S Development Board, use Arduino IDE
       uint8_t lux;             // 0-99 % of full illumination
       uint8_t aH2o;            // 0-99 % of full sensor level detection
       uint8_t dH2o;            // 0 or 1 digital readout 0=dry  (normal state)
-      uint8_t door;            // # times door opened and closed after previous report. Even # or 0 means door currently closed
+      uint8_t doorCount;       // # times door opened and closed after previous report.
+      uint8_t door;            // door = 0 when closed, 1 when open
       uint8_t pir;             // # times pir detected motion after previous report
+      uint8_t sonic;           // 0=absent 1=present
   } platforms;
   
   #ifdef ESP32  //store the reaadings persistently if esp32
-    RTC_DATA_ATTR platforms sensorData ={sensorID,0,0,0,0,0,0,0,0};     
+    RTC_DATA_ATTR platforms sensorData ={sensorID,0,0,0,0,0,0,0,0,0,0};     
   #endif
   #ifdef ESP8266
-    platforms sensorData = {sensorID,0,0,0,0,0,0,0,0};   to initialize  
+    platforms sensorData = {sensorID,0,0,0,0,0,0,0,0,0,0};   to initialize  
   #endif  
   uint8_t aH2oMeasured = 0; // sensor measurement prior to preocessing
-  RTC_DATA_ATTR uint8_t priorDoor = 77; //last door status = 0 (closed) or 1 (open)
+  RTC_DATA_ATTR uint8_t priorDoor = 0; //last door status = 0 (closed) or 1 (open)
   String hum="--",tem="--",pres="--"; //adjusted values sent to hub if wifi used: "--" if nan or current reading if valid
   //String payload ="11,22,3333,4,55,66,77,----"; future plan
 
@@ -312,7 +286,7 @@ NOTES -  1. IF using MELife for ESP32 ESP-32S Development Board, use Arduino IDE
       #include <ESPAsyncTCP.h>           //added for esp8266
     #endif  
     #include <esp_now.h>
-    esp_now_peer_info_t peerInfo;   // Create peer interface              
+    esp_now_peer_info_t peerInfo;   // Create peer interface if sending
   #endif
 
   //*****************
@@ -542,7 +516,7 @@ oled.setCursor(0,0);
             Serial.println(" DOOR OPEN");
           #endif  
         }
-        oled.print(sensorData.door);
+        oled.print(sensorData.doorCount);
       }
     #endif
     oled.println("  ");  
@@ -572,7 +546,9 @@ void displayVersion(){
       oled.setFont(Arial_14);
       oled.println(VERSION);      
     #endif
-    blinkBoardLED(5);    // blink LED for 5 sec for feedback and to give user time to activate serial console   
+    #ifndef BATTERY
+      blinkBoardLED(5);    // blink LED for 5 sec for feedback and to give user time to activate serial console   
+    #endif
   }
 }  
 
@@ -590,8 +566,8 @@ void displayVersion(){
     if(status==0){
       if(sleepSeconds==0){
       }else{
-        sensorData.door = 0;
-        priorDoor = 0;
+        sensorData.doorCount = 0;
+        //priorDoor = 0;
         sensorData.pir = 0;   
         //displayStatus();     
         setupWakeupConditions();
@@ -719,6 +695,7 @@ void printSensorData(){
     Serial.print(sensorData.dH2o);Serial.print(F(" dh2o "));
     Serial.print(sensorData.door);Serial.print(F(" door "));
     Serial.print(sensorData.pir);Serial.println(F(" motion "));
+    Serial.print(sensorData.sonic);Serial.println(F(" sonic "));
   #endif  
 }
 
@@ -774,21 +751,30 @@ void readDh2o(){
 //***********************************
 void readDoor(){
   #ifdef printMode
-    Serial.print(F("*readDoor*"));Serial.print(F(" pinDoor: "));Serial.println(digitalRead(pinDoor));  
+    Serial.print(F("*readDoor*"));
+    Serial.print(F(" pinDoor : "));Serial.print(digitalRead(pinDoor));
+    Serial.print(F(" priorDoor : "));Serial.print(priorDoor);
+    Serial.print(F(" doorCount: "));Serial.println(sensorData.doorCount);
   #endif
   if (doors[sensorID]==1){
     //door = 1 when closed, 0 when open due to pullup resister
-    //we want door = 0 when closed (normal state):
-    if (sensorData.door > 0) {
-      if (priorDoor == !digitalRead(pinDoor)){
-       }else{
-         priorDoor=!digitalRead(pinDoor);
-         sensorData.door ++;
-     }
-   }else{
-     sensorData.door = !digitalRead(pinDoor);
-     priorDoor=sensorData.door;
-   }
+    //we invert to report 0 = closed so report csv all 0 for normal state
+    if (sensorData.doorCount > 0) {
+      if (priorDoor == digitalRead(pinDoor)){
+        //do nothing if door state is unchanged
+      }else{
+        //
+        sensorData.door = !digitalRead(pinDoor);  //report door state 0 if closed, 1 if open
+        sensorData.doorCount++;                  //increment doorCount
+        priorDoor=sensorData.door;                //save dooor status for later comarison
+
+      }
+    }else{
+      //doorCount = 0 (no prior unreported open doors) processing:
+      sensorData.door = !digitalRead(pinDoor);  //report door state 0 if closed, 1 if open
+      sensorData.doorCount=sensorData.door;     //set doorCount 0 if closed, 1 if open
+      priorDoor=sensorData.door;                //save dooor status for later comarison
+    }
   }  
   #ifdef testMode
     Serial.print("door: ");Serial.println(sensorData.door);
@@ -1038,11 +1024,8 @@ void setupESPNOW_1to1(){
     Serial.println(F("*setupESPNOW_1to1*"));
   #endif
   #ifdef ESPNOW_1to1
-
     sensorData.id = sensorID;
-    
     WiFi.mode(WIFI_STA);
-  
     // Init ESP-NOW
     if (esp_now_init() != ESP_OK) {
       #ifdef printMode
@@ -1051,8 +1034,7 @@ void setupESPNOW_1to1(){
       return;
     }
   
-    // Once ESPNow is successfully Init, we will register for Send CB to
-    // get the status of Trasnmitted packet
+    // register for Send CB to get the status of Trasnmitted packet
     esp_now_register_send_cb(ESPNOW_1to1_OnDataSent);
     
     // Register peer
