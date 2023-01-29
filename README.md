@@ -61,7 +61,7 @@ The **AmbientHUB** software collects the sensor values
 for hourly transmission via the **Hologram** IoT cellular 
 platform to the listed website services.
 
-### Supported Services
+### Supported Services via Cellular
 
 -    https://io.adafruit.com/ MQTT for dashboard and redundant IFTTT webhook route
 
@@ -69,18 +69,12 @@ platform to the listed website services.
 
 -    https://dweet.io/ which simply saves the messages in scratchpad format
 
-<br>
+### Supported Services via Wifi
 
-### Planned
+-    Home Assistant or any MQTT Broker using a local wifi router
 
-- **Google Sheets** directly without **IFTTT**
-    Anyone know how to do this?
+-    Telegram for tailored commands
 
-- **ThingsBoard**
-
-- Remote **soil** sensing/**lawn sprinkler** control
- 
-- Smart **camera**
 
 <br>
 <br>
