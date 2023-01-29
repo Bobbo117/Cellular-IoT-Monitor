@@ -1,6 +1,7 @@
 # Cellular IoT Monitor  
 
 *Transmit sensor data from remote locations without internet.*
+*Transfer data to email, text, Google Sheets, IFTTT, Home Assistant, and more.*
 
 <br>
 
@@ -95,7 +96,6 @@ immediate alerts when sensors cross adaptive thresholds.
    `BME-280`, MCP9808, `DHTxx`, AHT10, SHT20
 
 -   An optional `SSD1306` OLED display 
-
     https://www.amazon.com/gp/product/B07W1PT6VK
 
 -   door / window sensors
@@ -109,6 +109,14 @@ immediate alerts when sensors cross adaptive thresholds.
     
 -   PIR/ motion Sensors
     https://www.amazon.com/DIYmall-HC-SR501-Motion-Infrared-Arduino/dp/B012ZZ4LPM
+    
+-   HC-SR04 or HC-SR04P Ultrasonic sensor
+    https://www.amazon.com/dp/B07VZBYSLX/ref=cm_sw_em_r_mt_dp_05X0C8N082YTTBTS895K?_encoding=UTF8&psc=1&pldnSite=1
+    
+-   DC 5V 1 Channel Relay Module Board Shield High/Low Level Trigger with Optocoupler
+    https://www.amazon.com/gp/product/B079FJSYGY/ref=ox_sc_act_title_11?smid=A11A70Q280RHPK&th=1
+    
+    
 
 <br>
 
