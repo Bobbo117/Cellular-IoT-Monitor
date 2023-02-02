@@ -1,7 +1,9 @@
 
 const char* APP = "AmbientHUB ";
-const char* VERSION = "2022 v1215";
+const char* VERSION = "2023 v0131";
 
+/* 
+*/
 /////////////////////////////////////////////////////////////////////////////////////
 //
 // AmbientHUB Can operate in 3 modes:
@@ -78,7 +80,12 @@ const char* VERSION = "2022 v1215";
   //*****************************
 
   #define AMBIENT_HUB          // AMBIENT_HUB collects data from up to three sensor platforms and reports via cellular connection.
-  //#define INTERMEDIATE_HUB   // reports via ESPNOW to an AMBIENT_HUB.
+  #define HA                   // Enable to ommunicate with Home Assistant
+  #define TELEGRAM             // Enable telegram
+  
+  //#define INTERMEDIATE_HUB   // Reports via ESPNOW to an AMBIENT_HUB.
+  //#define gateway            // Destination device interfaces with internet gateway
+  
   //#define GPS_MODE           // GPS application tracks location on adafruit.io
 
   //******************************
@@ -117,17 +124,69 @@ const char* VERSION = "2022 v1215";
 
     //Data Outputs: 
     //#define ESPNOW_1to1 // to send via espnow
+
     #define cellularMode        //  enables a cellular connection; // = no connection (for debugging code without racking up cellular costs)
     #ifdef cellularMode
       #define adaMQTT             // enables use of adafruit mqtt publish; // = disable MQTT
       //#define adaMQTT_Subscribe //needs work!   // enables use of adafruit mqtt subscribe; // = disable 
       #define iFTTTMode           // enables use of ifttt; // = disable IFTTT
       #define dweetMode           // enables use of dweet; // = disable dweet
-      #define simSleepMode        // shut off sim modem between readings 
+      //#define simSleepMode        // shut off sim modem between readings 
       //#define testCellular      // comment out if you dont want to enable test transmission to dweet, ifttt at initial startup
       //#define ATMode            // uncomment to use AT commands as workarounds to higher level FONA commands improves success rate thru ifttt 
     #endif
-    //#define alertMode           //  enables postAlert when a measurement crosses threshhold; // = no alert
+    
+    #define alertMode           //  enables postAlert when a measurement crosses threshhold; // = no alert
+    #define GARAGE
+    #ifdef HA
+      #define mqTTMode
+      //****************wifi stuff
+      #include <WiFi.h>
+      #include "WiFiMulti.h"
+      #include <HTTPClient.h>
+      #ifdef TELEGRAM
+        #include <WiFiClientSecure.h>
+        #include <UniversalTelegramBot.h> // Universal Telegram Bot Library written by Brian Lough: https://github.com/witnessmenow/Universal-Arduino-Telegram-Bot
+        #include <ArduinoJson.h>
+        // Initialize Telegram BOT
+        #define BOTtoken SECRET_BOTTOKEN      
+        #define CHAT_ID SECRET_CHAT_ID   
+        WiFiClientSecure client;
+        UniversalTelegramBot bot(BOTtoken, client);
+        //Checks for new messages every 1 second.
+        int botRequestDelay = 1000;
+        unsigned long lastTimeBotRan;      
+      #endif
+      #define WIFI_SSID SECRET_WIFI_SSID
+      #define WIFI_PASSWORD SECRET_WIFI_PASSWORD
+
+      //***************mqtt stuff
+      #include <AsyncMqttClient.h>
+      AsyncMqttClient mqttClient;  // Create a MQTT client Object
+      #define MQTT_HOST "192.168.1.187"  //12/29/2022
+      #define MQTT_PORT 1883
+      #define MQTT_USER_NAME "user151"
+      #define MQTT_USER_PWD  "user151"  //same as username
+      
+      #define BUTTON_TOPIC          "garage/button"
+      #define TEMPERATURE_TOPIC     "garage/temperature"
+      #define HUMIDITY_TOPIC        "garage/humidity"
+      #define PRESSURE_TOPIC        "garage/pressure"
+      #define DOOR_TOPIC            "garage/door"
+      #define DOOR_COUNT_TOPIC      "garage/doorcount"
+      #define PIR_TOPIC             "garage/pir"
+      #define LUX_TOPIC             "garage/lux"
+      #define AH2O_TOPIC            "garage/ah2o"
+      #define DH2O_TOPIC            "garage/dh2o"
+      #define SONIC_TOPIC           "garage/sonic"
+      #define SEND_FAILURES_TOPIC   "garage/sendfailures"
+
+      #define HATCH_TOPIC           "garage/hatch"
+
+      #define HUB_TEMPERATURE_TOPIC "hub/temperature"
+      #define HUB_HUMIDITY_TOPIC    "hub/humidity"
+      #define HUB_PRESSURE_TOPIC    "hub/pressure"
+    #endif
   #endif
 
   //*******************************   
@@ -136,7 +195,8 @@ const char* VERSION = "2022 v1215";
   #define OLED_               // 64x128 pixel OLED display if hub uses one
   #define printMode           // comment out if you don't want brief status display of sensor readings, threshholds and cellular interactions to pc
   //#define testMode          // uncomment for verbose test messages to status monitor for heavy debug / verification
-  
+  bool reportFlag = true;     //issue report after startup, also when new data exists
+
   //*****************
   // 4. Timing Parameters
   //*****************
@@ -147,7 +207,7 @@ const char* VERSION = "2022 v1215";
     int heartbeatMinutes = 5; //;          // 10 heartbeat delay after HUB awakens.  this needs to be at least 2 minutes less than espAwakeSeconds
                                             // IF espSleepSeconds - 0, then this is the heartbeat frequency.
     const long chillSeconds = 10;        //interval between readings if sleepSeconds = 0 slows serial monitor updates
-  
+    const long sensorSeconds = 5;        // interval in seconds to refresh local time sensitive sensor readings 
     const long serialMonitorSeconds = 5*60; // interval in seconds to refresh serial monitor sensor readings (enhances readability)            
     const long samplingRateSeconds = 10;    // interval in seconds between sensor readings in alertMode
   #endif
@@ -164,11 +224,12 @@ const char* VERSION = "2022 v1215";
   #endif
   
   #ifdef AMBIENT_HUB
-    const int espSleepSeconds = 48*60;     // or 0; heartbeat period OR wakes up out of sleepMode after sleepMinutes           
+    const int espSleepSeconds = 0; //48*60;     // or 0; heartbeat period OR wakes up out of sleepMode after sleepMinutes           
     const long espAwakeSeconds = 12*60;    // interval in seconds to stay awake as HUB; you dont need to change this if espSleepSeconds = 0 indicating no sleep
-    int heartbeatMinutes = 10;             // 10 heartbeat delay after HUB awakens.  this needs to be at least 2 minutes less than espAwakeSeconds
+    int heartbeatMinutes = 60;             // 10 heartbeat delay after HUB awakens.  this needs to be at least 2 minutes less than espAwakeSeconds
                                            // IF espSleepSeconds - 0, then this is the heartbeat frequency.
     const long chillSeconds = 10;          //interval between readings if sleepSeconds = 0 slows serial monitor updates
+    const long sensorSeconds = 5;        // interval in seconds to refresh time sensitive sensor readings 
   
     const long serialMonitorSeconds = 5*60; // interval in seconds to refresh serial monitor sensor readings (enhances readability)            
     const long samplingRateSeconds = 10;    // interval in seconds between sensor readings in alertMode
@@ -189,7 +250,7 @@ const char* VERSION = "2022 v1215";
   //*****************
   // 6. Select one temperature sensor if there is an onboard sensor:
   //****************
-  //#define AHT10_    // Adafruit AHT10  
+  //#define AHT10_    // Adafruit AHT10  <--GARAGE
   #define BME_        // BME280 temperature, humidity, pressure sensor
   //#define DHT_      // DHT11,21,22, etc. temperature, humidity sensors
   //#define MCP9808_  // botletics shield temperature sensor
@@ -206,12 +267,13 @@ const char* VERSION = "2022 v1215";
   // arrays to indicate types of sensors aboard each sensor platform (1=presnt, 0 = absent)
   // HUB  sensorID=0; boards are 1,2,3.. example: temps[]={1,0,1,0} indicates hub and sensor #2 have temp sensors, sensor #1 and #3 do not.
   #ifdef INTERMEDIATE_HUB
-    uint8_t temps[] = {1,1,0,0}, hums[]={1,1,0,0}, dbms[]={0,0,0,0}, pres[]={0,0,0,0}, bat[]={0,0,0,0};
-    uint8_t luxs[] = {0,0,0,0}, h2os[] = {0,0,0,0},doors[]={0,1,1,0},pirs[]={1,1,0,0},sonics[]={1,0,0,0};
+    uint8_t temps[] = {1,0,0,0}, hums[]={1,0,0,0}, dbms[]={0,0,0,0}, pres[]={1,0,0,0}, bat[]={0,0,0,0};
+    uint8_t luxs[] = {0,0,0,0}, h2os[] = {0,0,0,0},doors[]={1,0,1,0},pirs[]={1,0,0,0},sonics[]={0,1,0,0};
   #endif
   #ifndef INTERMEDIATE_HUB
-    uint8_t temps[] = {1,1,1,1}, hums[]={1,1,1,1}, dbms[]={1,0,0,0}, pres[]={1,0,0,0}, bat[]={0,0,0,0};
-    uint8_t luxs[] = {0,0,0,0}, h2os[] = {0,0,0,0},doors[]={0,1,0,0},pirs[]={0,1,0,0},sonics[]={0,1,0,0};
+    uint8_t temps[] = {1,1,0,1}, hums[]={1,1,0,1}, dbms[]={1,0,0,0}, pres[]={1,1,0,1}, bat[]={0,0,0,0};
+    uint8_t luxs[] = {0,0,0,0}, h2os[] = {0,0,0,0}, doors[]={0,1,0,1}, pirs[]={0,1,0,0}, sonics[]={0,0,1,0};
+    //const char* location[] = {"hub","garage","garage","hatch","lanai","kitchen","den"};
   #endif
   //*****************
   // 8. sensor data structure
@@ -228,11 +290,12 @@ const char* VERSION = "2022 v1215";
       uint8_t doorCount;       // # times door opened and closed after previous report
       uint8_t door;            // 0=door is closed 1=door is open  
       uint8_t pir;             // # times pir detected motion after previous report
-      uint8_t sonic;           // 0=absent 1=present
+      uint16_t sonic;           // 0=absent 1=present
+      uint8_t sendFailures;    // # failed attempts to send via espNow
   } platforms;
   
-  platforms sensorData = {0,0,0,0,0,0,0,0,0,0,0}; // Creates a structure called sensorData to receive data from sensor platforms
-  platforms dataOut = {1,0,0,0,0,0,0,0,0,0,0};    // structure for sending data out
+  platforms sensorData = {0,0,0,0,0,0,0,0,0,0,0,0}; // Creates a structure called sensorData to receive data from sensor platforms
+  platforms dataOut = {1,0,0,0,0,0,0,0,0,0,0,0};    // structure for sending data out
   RTC_DATA_ATTR platforms platform[numberOfPlatforms]; //stores the reaadings persistently in an array of structures
   uint8_t aH2oMeasured = 0; // sensor measurement prior to preocessing
   RTC_DATA_ATTR uint8_t priorDoor = 0; //last door status = 0 (closed) or 1 (open)
@@ -248,7 +311,7 @@ const char* VERSION = "2022 v1215";
   uint8_t alert[numberOfPlatforms]; // used to accumulate # sensors that have alert condition
   #define h2oThreshhold  20         // water threshhold % which will cause display or IFTTT alert if enabled
   #define luxThreshhold  45         // light threshhold % which will cause display or IFTTT alert if enabled
-  #define sonicThreshhold 40 //70 not alert
+  #define sonicThreshhold 75        // floor = 85 
   
   #ifdef alertMode  
     //Arrays to indicate which sensors can be used to generate an alert
@@ -316,6 +379,12 @@ const char* VERSION = "2022 v1215";
   }
   unsigned long currentMillis =0;
   unsigned long priorMillis=0;
+
+  #ifdef HA
+    TimerHandle_t mqttReconnectTimer; //Create two Timer Objects
+    TimerHandle_t wifiReconnectTimer;
+  #endif  
+  
   //*****************
   //    ESP32 PIN DEFINITIONS
   //    note: esp32 set pin 15 low prevents startup log on Serial monitor - 
@@ -498,6 +567,8 @@ const char* VERSION = "2022 v1215";
   #ifdef ESPNOW
     #include <esp_now.h>
     #include <WiFi.h>               //espNow uses its own wifi; no external wifi router is used
+    #include <esp_wifi.h>
+    
     #ifdef ESPNOW_1to1
       esp_now_peer_info_t peerInfo;   // Create peer interface if sending
       //uint8_t broadcastAddress[] = {0xAC, 0x67, 0xB2, 0x2B, 0x6D, 0x00};  //example for esp32 #7 MAC Address AC:67:B2:2B:6D:00
@@ -506,8 +577,8 @@ const char* VERSION = "2022 v1215";
       //uint8_t broadcastAddress[] = {0x40, 0x91, 0x51, 0x30, 0x62, 0x94};   // lillygo2: 40:91:51:30:62:94
      
       int espNowAttempts=0;            //number of ESPNOW transmission attempts so far (do not adjust)
-      #define espNowAttemptsAllowed 3  //number of unsuccessful attempts allowed before sleeping if sleepSeconds > 0
-      int espNowDelay = 1000;         //delay in msec between espnow attempts
+      #define espNowAttemptsAllowed 30  //number of unsuccessful attempts allowed before sleeping if sleepSeconds > 0
+      int espNowDelay = 50;         //delay in msec between espnow attempts
     #endif
   #endif
 
@@ -576,13 +647,16 @@ void setup() {
   turnOnBoardLED();
   displayPlatforms();              // Display each platform latest sensor readings on OLED display 
   serialPrintVersion();            // If printMode enabled, begin serial monitor, Show startup info, turnOnBoardLED
+  //setupOTA();
   //attachInterrupt(digitalPinToInterrupt(pinPir), pirInterrupt, RISING);  //in case you want to try it!
   //attachInterrupt(digitalPinToInterrupt(pinDoor), doorChangeInterrupt, CHANGE); //in case you want to try it!
   setupSensors();                  // Wake up the HUB temp sensors 
   runSelfTest();                   // SIM on/off, test network on first boot if testCellular enabled 
+  setupMQTT();                     //if mqTTmode is set
   setupEspNow();                   // initialize communication with with external sensor platforms if enabled
   setupMQTT_Subscribe();           // setup if adaMQTT_Subscribe enabled
   setupGPS();                      // setup gps if GPS_MODE enabled
+  setupTelegram();
   turnOffBoardLED();
 }
 
@@ -590,7 +664,7 @@ void setup() {
 // ***  Loop()  ***
 ////////////////// 
 void loop() {
-  
+
 // 1. Poll certain local sensors if they exist  
   readDoor();
   readAh2o();
@@ -599,10 +673,11 @@ void loop() {
   readPir();
   readSonic();
   processGarage();
+  readTelegram();
   if (readGPS()==0){
     formatData();                   
   }
-     
+
 // 2. Read add'l local and remote sensors if available and display on OLED and serial monitor
   processSensorPlatforms(); 
 
@@ -612,15 +687,18 @@ void loop() {
 // 4. Heartbeat: upload latest periodic data if its time
   postSensorHeartbeatData();
 
-// 5. Go to sleep if snooze mode time has elapsed
-  napTime();
-
- // sendEspNow_1to1();        //format data and send espnow msg to a single peer if #define ESPNOW_1to1 is enabled; 
+// 5. sendEspNow_1to1();        //format data and send espnow msg to a single peer if #define ESPNOW_1to1 is enabled; 
                               //successful data transfer will cause the system to sleep if sleepSeconds > 0                                
 
-// 6. Loop back to step 1   
+// 6. publishMQTT                 // NOTE: publishMQTT() is called from within the ESPNOW Callback fnc.  Enable it heere if 
+                              //data is received via non ESPNOW protocol.    
+
+// 7. Go to sleep if snooze mode time has elapsed
+  napTime();
+
+// 8. Loop back to step 1   
   #ifdef printMode
-    delay(10000);    //delay before looping so that staus display is readable if printMode is enabled
+    //delay(1000);    //delay before looping so that staus display is readable if printMode is enabled
   #endif  
 }
 
@@ -1021,16 +1099,16 @@ void espNowOnDataRecv(const uint8_t * mac_addr, const uint8_t *incomingData, int
       platform[sensorData.id].lux = sensorData.lux;
       platform[sensorData.id].aH2o = sensorData.aH2o;
       platform[sensorData.id].dH2o = sensorData.dH2o;
-      //platform[sensorData.id].door = sensorData.door;
-      //platform[sensorData.id].pir = sensorData.pir;
-      //count door openings and movement hits
       platform[sensorData.id].doorCount =  platform[sensorData.id].doorCount + sensorData.doorCount;
       platform[sensorData.id].door =  sensorData.door;
       platform[sensorData.id].pir = platform[sensorData.id].pir  + sensorData.pir;
       platform[sensorData.id].sonic = sensorData.sonic;
-      
+      platform[sensorData.id].sendFailures = sensorData.sendFailures;
+
+      publishMQTT(); 
+   
       #ifdef printMode    
-        Serial.println(F("id      temp    hum    pres    lux    aH2o    dH2o    door   doorCount  pir  sonic"));
+        Serial.println(F("id      temp    hum    pres    lux    aH2o    dH2o    door   doorCount  sonic   pir  Fails"));
         Serial.print(sensorData.id);Serial.print("\t");
         Serial.print(sensorData.temperature);Serial.print("\t");
         Serial.print(sensorData.humidity);Serial.print("\t");
@@ -1040,8 +1118,12 @@ void espNowOnDataRecv(const uint8_t * mac_addr, const uint8_t *incomingData, int
         Serial.print(sensorData.dH2o);Serial.print("\t"); 
         Serial.print(sensorData.door);Serial.print("\t"); 
         Serial.print(sensorData.doorCount);Serial.print("\t"); 
-        Serial.println(sensorData.sonic);
+        Serial.print(sensorData.sonic);Serial.print("\t"); 
+        Serial.print(sensorData.pir);Serial.print("\t");
+        Serial.println(sensorData.sendFailures); Serial.println("");
       #endif 
+      
+      printSensorData();
   #endif
 }
 
@@ -1058,15 +1140,18 @@ void espNowOnDataRecv(const uint8_t * mac_addr, const uint8_t *incomingData, int
       Serial.println(status == ESP_NOW_SEND_SUCCESS ? " Delivery Success" : " Delivery Fail");
     #endif
     if(status==0){
+      platform[1].doorCount=0;
+      //platform[0].pir=0;
+      platform[1].pir=0;
+      //platform[1].sendFailures=0;
       if(espSleepSeconds==0){
       }else{
+
         //sensorData.doorCount = 0;
         //priorDoor = 0;
         //sensorData.pir = 0;   
         //displayStatus();   
-        platform[1].doorCount=0;
-        platform[0].pir=0;
-        platform[1].pir=0;
+
         /*  
         setupWakeupConditions();
         #ifdef printMode
@@ -1078,6 +1163,8 @@ void espNowOnDataRecv(const uint8_t * mac_addr, const uint8_t *incomingData, int
       }  
     }else{
       espNowAttempts++;
+      platform[1].sendFailures = espNowAttempts;
+
       if (espNowAttempts >= espNowAttemptsAllowed){ 
         /*
         setupWakeupConditions();  //interrupt if door state changes
@@ -1104,29 +1191,29 @@ void formatData(){
   char comma[2]={',',0};  
   strcpy (buf,dataTag); //lead with unique HUB data stream identifier
 
-#ifdef GPS_MODE
-  //process gps data
-  strcpy(separator,prefix);  //separator used between groups of similar data  
-  strcat(buf,separator);
-  dtostrf(gpsData.lat, 1, 6, buf2); 
-  strcat(buf, buf2);
-  strcat(buf,separator);
-  dtostrf(gpsData.lon, 1, 6, buf2); 
-  strcat(buf, buf2);
-  strcat(buf,separator);
+  #ifdef GPS_MODE
+    //process gps data
+    strcpy(separator,prefix);  //separator used between groups of similar data  
+    strcat(buf,separator);
+    dtostrf(gpsData.lat, 1, 6, buf2); 
+    strcat(buf, buf2);
+    strcat(buf,separator);
+    dtostrf(gpsData.lon, 1, 6, buf2); 
+    strcat(buf, buf2);
+    strcat(buf,separator);
     dtostrf(gpsData.spd, 1, 0, buf2); 
-  strcat(buf, buf2);
-  strcat(buf,separator);
+    strcat(buf, buf2);
+    strcat(buf,separator);
     dtostrf(gpsData.accuracy, 1, 4, buf2); 
-  strcat(buf, buf2);
-  #ifdef printMode
-    Serial.print(F("buf: "));Serial.println(buf);
-  #endif 
-  return; 
-#endif
+    strcat(buf, buf2);
+    #ifdef printMode
+      Serial.print(F("buf: "));Serial.println(buf);
+    #endif 
+    return; 
+  #endif
 
-strcat (buf,prefix);
-strcat(buf,prelude);
+  strcat (buf,prefix);    //Add prefix (identifier if the location being reported)
+  strcat(buf,prelude);    //Alert hightlight such as GAR OPEN or blank
    
   //process temperature
   strcpy(separator,prefix);  //separator used between groups of similar data  
@@ -1221,11 +1308,22 @@ strcat(buf,prelude);
     }
   }
 
+  //process sonic = car detection
+  strcpy(separator,prefix);  //separator used between groups of similar data  
+  for(int i=0;i<numberOfPlatforms;i++){
+    if(sonics[i]==1){
+      strcat(buf,separator);
+      dtostrf(platform[i].sonic, 1, 0, buf2); 
+      strcat(buf, buf2);
+      strcpy(separator,comma);
+    }
+  }
+  
   //append bootCount
-  strcpy(separator,prefix);  //separator used between groups of similar data 
-  strcat(buf,separator); 
-  dtostrf(bootCount, 1, 0, buf2); 
-  strcat(buf,buf2);
+  //strcpy(separator,prefix);  //separator used between groups of similar data 
+  //strcat(buf,separator); 
+  //dtostrf(bootCount, 1, 0, buf2); 
+  //strcat(buf,buf2);
 
   #ifdef printMode
     Serial.print(F("buf: "));Serial.println(buf);
@@ -1242,6 +1340,22 @@ static int heartbeatTimeIsUp(long msec){    //Read data at timed intervals
     return(0);
   }
 } 
+
+//****************************************
+#ifdef gateway
+int32_t getWiFiChannel(const char *ssid) {
+  if (int32_t n = WiFi.scanNetworks()) {
+      for (uint8_t i=0; i<n; i++) {
+          if (!strcmp(ssid, WiFi.SSID(i).c_str())) {
+              return WiFi.channel(i);
+          }
+      }
+  }
+  return 0;
+}
+#endif
+
+
 //****************************************
 String httpGETRequest(const char* serverName) {
   #ifdef printMode 
@@ -1298,7 +1412,7 @@ void initializeArrays(){
   }
 }
 
-//****************************************
+/***************************************
 void killWifi(){
   #ifdef WIFI
     WiFi.disconnect();
@@ -1307,7 +1421,7 @@ delay(500);
     //if (testMode==1) {Serial.println("*WiFi killed*");}
   #endif  
 }   
-
+*/
 //*********************************
 int8_t MQTT_connect() {
   int8_t retn = -1;  //returns 0 if connection success
@@ -1550,7 +1664,7 @@ int8_t postSensorData(){       //upload sensor data to  adaFruit, dweet.io or IF
   #endif
   if (retn==0){
     for(uint8_t j=0;j<numberOfPlatforms;j++){
-      platform[j].door =  0;
+     // platform[j].door =  0;
       platform[j].doorCount = 0;
       priorDoor = 0;
       platform[j].pir = 0;
@@ -1622,7 +1736,7 @@ ifttt_:  //Ifttt processing
   #endif
   if (retn==0){
     for(uint8_t j=0;j<numberOfPlatforms;j++){
-      platform[j].door =  0;
+     // platform[j].door =  0;
       platform[j].doorCount = 0;
       priorDoor = 0;
       platform[j].pir = 0;
@@ -1687,7 +1801,7 @@ dweet_:  //dweet processing
 
     if(i<postTries){ 
     for(uint8_t j=0;j<numberOfPlatforms;j++){
-      platform[j].door =  0;
+     // platform[j].door =  0;
       platform[j].doorCount = 0;
       priorDoor = 0;
       platform[j].pir = 0;
@@ -1757,17 +1871,21 @@ void printSensorData(){
 //  if(chillTimeIsUp(chillSeconds*1000)==1){   //slow down loop for serial monitor readability
     #ifdef printMode
       Serial.println(F("*printSensorData*"));
+      Serial.println(F("id      temp    hum    pres    lux    aH2o    dH2o    door   doorCount  sonic   pir  Fails"));
+      
       for (int i=0;i<numberOfPlatforms;i++){ 
-         Serial.print(platform[i].id);Serial.print(F(": "));
-         Serial.print(platform[i].temperature);Serial.print(F(" F "));//Serial.print("\t"); 
-         Serial.print(platform[i].humidity);Serial.print(F(" % ")); 
-         Serial.print(platform[i].pressure);Serial.print(F(" mb ")); 
-         Serial.print(platform[i].lux);Serial.print(F(" lux "));
-         Serial.print(platform[i].aH2o);Serial.print(F(" aH2o "));
-         Serial.print(platform[i].dH2o);Serial.print(F(" dH2o "));
-         Serial.print(platform[i].door);Serial.print(F(" door "));
-         Serial.print(platform[i].pir);Serial.print(F(" pir "));
-         Serial.print(platform[i].sonic);Serial.println(F(" sonic "));
+        Serial.print(platform[i].id);Serial.print("\t");
+        Serial.print(platform[i].temperature);Serial.print("\t");
+        Serial.print(platform[i].humidity);Serial.print("\t");
+        Serial.print(platform[i].pressure);Serial.print("\t");  
+        Serial.print(platform[i].lux);Serial.print("\t");     
+        Serial.print(platform[i].aH2o);Serial.print("\t"); 
+        Serial.print(platform[i].dH2o);Serial.print("\t"); 
+        Serial.print(platform[i].door);Serial.print("\t"); 
+        Serial.print(platform[i].doorCount);Serial.print("\t"); 
+        Serial.print(platform[i].sonic);Serial.print("\t"); 
+        Serial.print(platform[i].pir);Serial.print("\t");
+        Serial.println(platform[i].sendFailures);
       }
     #endif
 //  }
@@ -1906,9 +2024,9 @@ lux:
           doorReportedHigh[i]=1 ;
           doorReportedLow[i] = 0;
           flag=1; //post alert 
-          #ifdef INTERMEDIATE_HUB
+          //#ifdef INTERMEDIATE_HUB
             strcpy(prelude,"GAR OPEN");      
-          #endif      
+          //#endif      
           #ifdef printMode 
             Serial.print(F("; door open alert")); 
           #endif 
@@ -1922,9 +2040,9 @@ lux:
             doorReportedLow[i]=1 ;
             doorReportedHigh[i] = 0;
             flag=1; //post alert 
-            #ifdef INTERMEDIATE_HUB
+            //#ifdef INTERMEDIATE_HUB
               strcpy(prelude,"GAR SHUT");
-            #endif
+            // #endif
             #ifdef printMode 
               Serial.print(F("; door closed alert")); 
             #endif 
@@ -1997,30 +2115,41 @@ lux:
 
 //***********************************
 void processGarage(){
-  #ifdef INTERMEDIATE_HUB
-    if(platform[0].sonic ==PRESENT){  Serial.println(F("Car is PRESENT."));
-      if(platform[1].door==OPEN){     Serial.println(F("Garage door is OPEN; disable hatch."));
-        //disable Hatch, solid red
-      }else if (platform[2].door ==OPEN){ Serial.println(F("Car is PRESENT, hatch is open; disable garage door"));  //disable gar door flash red
-        //disable gar door
-      }else{                          Serial.println(F("Car is PRESENT, hatch and gar door are closed. Chill."));    
+  // 1. Disable garage door if car is present AND hatch is up,
+  // 2. Disable hatch if car is present AND garage door is up.
+  // 3. Close garage door if the car is absent AND the garage door is open AND there has been no motion for an hour.
+  #ifdef GARAGE
+    Serial.print(F("*processGarage*")); Serial.print(F("priorMillis, (millis() -  priorMillis): "));Serial.print(priorMillis);Serial.print(F(", "));Serial.println(millis()-priorMillis);
+
+    if(platform[2].sonic <= sonicThreshhold){  Serial.print(F("Car is PRESENT.  "));
+      if(platform[1].door>=OPEN){     Serial.println(F("Garage door is OPEN; DISABLE hatch."));
+        //disable Hatch, solid red (to be developed)
+
+        //after motion delay, send telegram
+        
+      }else if (platform[3].door >=OPEN){ Serial.println(F("Hatch is OPEN; DISABLE garage door"));  //disable gar door flash red
+        //disable gar door  //done by HA for now
+      }else{                          Serial.println(F("Hatch and garage door are CLOSED. CHILL."));  
+        priorMillis=0;  
       }
-    }else{                            Serial.println(F("Car is ABSENT."));  
-      if(platform[1].door ==OPEN){    Serial.println(F("Garage is OPEN"));
-          if(platform[0].pir==MOTION){Serial.println(F("There is MOTION in the garage."));
+
+    }else{                            Serial.print(F("Car is ABSENT.  "));  
+      if(platform[1].door >=1){    Serial.print(F("Garage is OPEN"));
+          if(platform[1].pir>=MOTION){Serial.println(F("There is MOTION in the garage."));
             priorMillis=millis();     //Restart the timer.
           }else{                      Serial.println(F("There is NO MOTION in the garage."));
-            if(priorMillis==0){       //if timer has not started, start the timer.
+            if((priorMillis==0)||(priorMillis>millis())){       //if timer has not started, or timer has rolled around, restart the timer.
               priorMillis=millis();   //Serial.print(F("priorMillis set to "));Serial.println(priorMillis);
             }
-            if(millis()-priorMillis>60000){  //Close door after an hour of no activity.
-              digitalWrite(pinGarage,1); Serial.println(F("Timeout: Close gar door."));
-              delay (500);
-              digitalWrite(pinGarage,0);
-              priorMillis=0;          //stop timer.
+            if(millis()-priorMillis>=60000) { // <--test 60000= 60 sec){  //Close door after an hour of no activity.
+             // digitalWrite(pinGarage,1); Serial.println(F("Timeout: Close garage door."));
+              delay (1500);
+             // digitalWrite(pinGarage,0);
+              priorMillis=0;          //reset timer.
             }   
           }
-      }else{                          Serial.println(F("Car is  absent, garage is closed.  Chill."));
+      }else{                          Serial.println(F("Garage is CLOSED. CHILL."));
+        priorMillis=0;
       }
     }
   #endif  
@@ -2039,7 +2168,9 @@ void  processSensorPlatforms(){
           platformStatus[i]= readSensorData(i); // need if no sleep time      
           if(platformStatus[i]==1){ //determine if sensor data has been updated
             sensorStatus[i]=1;    // indicate new data - display "%" after humidity in displayStatus()
-            printSensorData();
+            #ifdef WIFI
+              printSensorData();
+            #endif  
             alert[i]= processAlerts(i);    // compare sensors to threshholds and set alert status        
           }  
           #ifdef WIFI  
@@ -2048,7 +2179,7 @@ void  processSensorPlatforms(){
           #endif
     }  
       displayStatus(i);                   // update OLED display if there is one
-      platform[i].id=numberOfPlatforms+1; // new data will update id
+      platform[i].id=numberOfPlatforms+1; // indicate data has been processed; new data will update id
       #ifdef alertMode
         platformStatus[i]=0;              // indicates readiness to read new data 
       #endif      
@@ -2115,12 +2246,15 @@ void readDoor(){
      if (platform[sensorID].door > 0){
        if (priorDoor == !digitalRead(pinDoor)){
        }else{
-         priorDoor=!digitalRead(pinDoor);
-         platform[sensorID].door ++;
+         platform[sensorID].door=!digitalRead(pinDoor);
+         platform[sensorID].doorCount ++;
+         priorDoor=platform[sensorID].door;
+         
        }
      }else{
-       platform[sensorID].door = !digitalRead(pinDoor);
-       priorDoor=platform[sensorID].door;
+       platform[sensorID].door = !digitalRead(pinDoor);  //report door state 0 if closed, 1 if open
+       platform[sensorID].doorCount = platform[sensorID].door;
+       priorDoor=platform[sensorID].door;                 //save dooor status for later comparison
      }
   }
 }   
@@ -2233,102 +2367,98 @@ uint8_t readSensorData(uint8_t i){             // temp & voltage
 
   uint8_t returnFlag = 1;  //return success causes : display on OLED
   if (sensors[i]=="local"){
-    // readSignalStrength(i); causes crash
-     readBatteryVoltage(i);
-
-    platform[i].id=i;
-    
-    #ifdef MCP9808_              
-      tempsensor.wake();                // Wake up the MCP9808 if it was sleeping
-      float c = tempsensor.readTempC(); //read temperature in Celsius units
-      float x = c * 9.0 / 5.0 + 32;     //calculate Fahrenheit
-      if (isnan(x)){
-        returnFlag=0;         //causes ? on OLED
-        x=platform[i].temperature;
-      }
-      platform[i].temperature = x;
-      delay(500);
-    #endif
-
-    #ifdef AHT10_
-      sensors_event_t humidity, temp;
-      aht.getEvent(&humidity, &temp);// populate temp and humidity objects with fresh data
-      //Serial.print("Temperature: "); Serial.print(temp.temperature); Serial.println(" degrees C");
-      //Serial.print("Humidity: "); Serial.print(humidity.relative_humidity); Serial.println("% rH");
-      float x=temp.temperature;
-      x=1.8*x+32.0;
-      if (isnan(x)){
-        returnFlag=0;         //causes ? on OLED
-        x=platform[i].temperature;
-      }
-      platform[i].temperature = x;
-
-      x=humidity.relative_humidity;
-      if (isnan(x)){
-        x=platform[i].humidity;
-      }
-      platform[i].humidity=x;      
-    #endif 
-    #ifdef BME_
-      float x = 1.8*bme.readTemperature()+32.0;
-      if (isnan(x)){
-        returnFlag=0;         //causes ? on OLED
-        x=platform[i].temperature;
-      }
-      platform[i].temperature = x;
   
-      x = (bme.readHumidity());  
-      if (isnan(x)){
-        x=platform[i].humidity;
-      }
-      //humidity[i] = x;
-      platform[i].humidity=x;
-     
-       x = bme.readPressure()/100;
-       if (isnan(x)){
-         x=platform[i].pressure;
-       }
-       platform[i].pressure = x;
-     #endif
-     
-     #ifdef DHT_
-       float x = dht.readTemperature(true);  //*F
-       if (isnan(x)){
-         returnFlag=0;      //causes ? on OLED
-         x=platform[i].temperature;
-       }
-       platform[i].temperature = x;
-       
-       x = (dht.readHumidity());
-       if (isnan(x)){
-         x=platform[i].humidity;
-       }
-       platform[i].humidity = x;
-     #endif  
-
-      #ifdef SHT20_
-        float x = 1.8*sht20.readTemperature()+32.0;
+  
+    platform[i].id=i;
+  
+   if(sensorTimeIsUp(sensorSeconds*1000)==1){   //slow down loop for sensor R&R   
+  
+      //readSignalStrength(i); causes crash
+      readBatteryVoltage(i);
+      readSonic();
+      #ifdef MCP9808_              
+        tempsensor.wake();                // Wake up the MCP9808 if it was sleeping
+        float c = tempsensor.readTempC(); //read temperature in Celsius units
+        float x = c * 9.0 / 5.0 + 32;     //calculate Fahrenheit
+        if (isnan(x)){
+          returnFlag=0;         //causes ? on OLED
+          x=platform[i].temperature;
+        }
+        platform[i].temperature = x;
+        delay(500);
+      #endif
+  
+      #ifdef AHT10_
+        sensors_event_t humidity, temp;
+        aht.getEvent(&humidity, &temp);// populate temp and humidity objects with fresh data
+        //Serial.print("Temperature: "); Serial.print(temp.temperature); Serial.println(" degrees C");
+        //Serial.print("Humidity: "); Serial.print(humidity.relative_humidity); Serial.println("% rH");
+        float x=temp.temperature;
+        x=1.8*x+32.0;
+        if (isnan(x)){
+          returnFlag=0;         //causes ? on OLED
+          x=platform[i].temperature;
+        }
+        platform[i].temperature = x;
+  
+        x=humidity.relative_humidity;
+        if (isnan(x)){
+          x=platform[i].humidity;
+        }
+        platform[i].humidity=x;      
+      #endif 
+      #ifdef BME_
+        float x = 1.8*bme.readTemperature()+32.0;
         if (isnan(x)){
           returnFlag=0;         //causes ? on OLED
           x=platform[i].temperature;
         }
         platform[i].temperature = x;
     
-        x = (sht20.readHumidity());  
+        x = (bme.readHumidity());  
         if (isnan(x)){
           x=platform[i].humidity;
         }
+        //humidity[i] = x;
         platform[i].humidity=x;
-      #endif
-    
-     readPhotoCell();
-     readAh2o();
-     readDh2o();
-
-     if (pirs[i]==1){  //pirs handled by wakeup processing
-     } 
-
-     readDoor(); 
+       
+         x = bme.readPressure()/100;
+         if (isnan(x)){
+           x=platform[i].pressure;
+         }
+         platform[i].pressure = x;
+       #endif
+       
+       #ifdef DHT_
+         float x = dht.readTemperature(true);  //*F
+         if (isnan(x)){
+           returnFlag=0;      //causes ? on OLED
+           x=platform[i].temperature;
+         }
+         platform[i].temperature = x;
+         
+         x = (dht.readHumidity());
+         if (isnan(x)){
+           x=platform[i].humidity;
+         }
+         platform[i].humidity = x;
+       #endif  
+  
+        #ifdef SHT20_
+          float x = 1.8*sht20.readTemperature()+32.0;
+          if (isnan(x)){
+            returnFlag=0;         //causes ? on OLED
+            x=platform[i].temperature;
+          }
+          platform[i].temperature = x;
+      
+          x = (sht20.readHumidity());  
+          if (isnan(x)){
+            x=platform[i].humidity;
+          }
+          platform[i].humidity=x;
+        #endif
+    }
       
   }else if (sensors[i]=="wifi"){ 
     #ifdef WIFI
@@ -2429,25 +2559,46 @@ void readSignalStrength(int i){
 void readSonic(){
   if(sonics[sensorID]==1){
     #ifdef testMode
-      Serial.println(F("*reasSonic*"));
+      Serial.println(F("*reasdSonic*"));Serial.print(F("entry reportFlag: "));Serial.println(reportFlag);
     #endif     
+
+    //Send trigger pulse
     digitalWrite(pinSonicTrigger, HIGH);
     unsigned long time_now = micros();
     while (micros() < time_now + 10);
     digitalWrite(pinSonicTrigger, LOW);
   
+    //measure how long for the pulse to return and calculate the distance in cm
     float duration = pulseIn(pinSonicEcho, HIGH);
     float sensorDistance = (duration / 2) * 0.0344;
-    int savedDistance = round(sensorDistance+1); //rounding up
-    Serial.printf("\n\nDistance = %d cm\n", savedDistance);
-    if (savedDistance<=sonicThreshhold){
-      platform[sensorID].sonic=1;
-    }else{
-      platform[sensorID].sonic=0;
-    }
+    uint16_t distance = round(sensorDistance+1); //rounding up
+    Serial.printf("\n\nDistance = %d cm\n", distance);
+    
+    if (abs(distance-sensorData.sonic)>=15 ) {
+      sensorData.sonic=distance;       
+      reportFlag = true;
+    }    
+    
+    #ifdef printMode
+      Serial.print(F("exit reportFlag: "));Serial.println(reportFlag);
+    #endif
   }
 }
 
+//************************************
+void readTelegram(){
+  #ifdef TELEGRAM
+    if (millis() > lastTimeBotRan + botRequestDelay)  {
+      int numNewMessages = bot.getUpdates(bot.last_message_received + 1);
+      while(numNewMessages) {
+        Serial.println("got response");
+        handleNewMessages(numNewMessages);
+        numNewMessages = bot.getUpdates(bot.last_message_received + 1);
+      }
+      lastTimeBotRan = millis();
+   }
+  #endif
+}
 //*************************************
 uint8_t readWakeupID(){
   //read wakeup reason and return code
@@ -2690,7 +2841,7 @@ void setupEspNow(){
   #ifdef ESPNOW
     // Set device as a Wi-Fi Station
     WiFi.mode(WIFI_STA);
-
+    
     // Init ESP-NOW
     if (esp_now_init() != ESP_OK) {
       Serial.println("Error initializing ESP-NOW");
@@ -2702,6 +2853,17 @@ void setupEspNow(){
     esp_now_register_recv_cb(espNowOnDataRecv);
 
     #ifdef ESPNOW_1to1
+
+      #ifdef gateway
+        //Use active wifi channel in case destination connected to it.
+        int32_t channel = getWiFiChannel(SECRET_WIFI_SSID);
+        //WiFi.printDiag(Serial); // Verify channel number before
+        esp_wifi_set_promiscuous(true);
+        esp_wifi_set_channel(channel, WIFI_SECOND_CHAN_NONE);
+        esp_wifi_set_promiscuous(false);
+        //WiFi.printDiag(Serial); // verify channel change
+      #endif
+
       // register for Send CB to get the status of Trasnmitted packet
       esp_now_register_send_cb(ESPNOW_1to1_OnDataSent);
       
@@ -2777,6 +2939,7 @@ void setupOledDisplay(){
     oled.begin(&Adafruit128x64,I2C_ADDRESS); 
   #endif  
 }
+
 //*********************************
 void setupPinModes(){                
   //Set Pin Modes INPUT / OUTPUT
@@ -2809,7 +2972,8 @@ void setupPinModes(){
   if (sonics[sensorID]==1){
     pinMode (pinSonicTrigger, OUTPUT);
     pinMode (pinSonicEcho, INPUT);
-  }  
+  }
+  pinMode(pinGarage, OUTPUT);  
 
 }
 
@@ -2899,7 +3063,23 @@ int setupSimModule() {
   }
   return(0);
 }
-
+//*********************************
+void setupTelegram(){
+  #ifdef TELEGRAM
+    // Connect to Wi-Fi
+    //WiFi.mode(WIFI_STA);
+   // WiFi.begin(ssid, password);
+    #ifdef ESP32
+      client.setCACert(TELEGRAM_CERTIFICATE_ROOT); // Add root certificate for api.telegram.org
+    #endif
+    delay(1000);
+    //while (WiFi.status() != WL_CONNECTED) {
+    //  Serial.println("Connecting to WiFi..");
+    //}
+    // Print ESP32 Local IP Address
+    //Serial.println(WiFi.localIP());
+  #endif
+}
 //*********************************
 void setupWakeupConditions(){
   //set wakeup conditions based on door & PIR sensor
@@ -2925,7 +3105,7 @@ void setupWakeupConditions(){
   }  
 }      
 
-//***********************************
+/***********************************
 int setupWifi(uint8_t i){
   #ifdef WIFI  
     if (sensors[i]=="local"){return 0;}
@@ -2959,6 +3139,7 @@ int setupWifi(uint8_t i){
     }
   #endif
 }
+*/
 //*********************************
 void simModuleOffIfSimSleepMode(){    // Power off the SIM7000 module by goosing the PWR pin if simSleepMode = 1
   #ifdef printMode
@@ -3008,3 +3189,238 @@ void turnOffBoardLED(){             // Turn LED off
     digitalWrite(pinBoardLED, LOW);
   #endif
 }    
+
+//************************************************************WiFi Stuff
+void setupWifi(){
+  #ifdef HA
+   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+   while (WiFi.status() != WL_CONNECTED) {
+     delay(500);
+     Serial.print(".");
+   }
+   Serial.println(".");
+   Serial.print(" WiFi connected..");  
+   Serial.print("IP address: ");
+   Serial.println(WiFi.localIP());
+ #endif  
+}
+void connectToWifi() {
+  #ifdef HA
+  Serial.println("Connecting to Wi-Fi...");
+  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+  #endif
+}
+void WiFiEvent(WiFiEvent_t event) {
+    #ifdef HA
+
+  switch(event) {
+    case SYSTEM_EVENT_STA_GOT_IP:
+      Serial.println("WiFi connected");
+      Serial.println("IP address: ");
+      Serial.println(WiFi.localIP());
+      connectToMqtt();
+      break;
+    case SYSTEM_EVENT_STA_DISCONNECTED:
+      Serial.println("WiFi lost connection");
+      xTimerStop(mqttReconnectTimer, 0); // ensure we don't reconnect to MQTT while reconnecting to Wi-Fi
+      xTimerStart(wifiReconnectTimer, 0);
+      break;
+  }
+  #endif
+}
+void killWifi(){
+    #ifdef HA
+      WiFi.disconnect();
+      Serial.println("WiFi killed to preserve battery power");
+    #endif
+}   
+//**************************************************************************MQTT Stuff  
+void setupMQTT(){
+    #ifdef HA
+      mqttReconnectTimer = xTimerCreate("mqttTimer", pdMS_TO_TICKS(2000), pdFALSE, (void*)0, reinterpret_cast<TimerCallbackFunction_t>(connectToMqtt));
+      wifiReconnectTimer = xTimerCreate("wifiTimer", pdMS_TO_TICKS(2000), pdFALSE, (void*)0, reinterpret_cast<TimerCallbackFunction_t>(connectToWifi));
+      //event functions
+      WiFi.onEvent(WiFiEvent);
+      mqttClient.onConnect(onMqttConnect);
+      mqttClient.onDisconnect(onMqttDisconnect);
+      mqttClient.onSubscribe(onMqttSubscribe);
+      mqttClient.onUnsubscribe(onMqttUnsubscribe);
+      mqttClient.onMessage(onMqttMessage);
+      mqttClient.onPublish(onMqttPublish);
+      //MQTT Client login settings
+      mqttClient.setServer(MQTT_HOST, MQTT_PORT);
+      mqttClient.setCredentials(MQTT_USER_NAME, MQTT_USER_PWD);
+      connectToWifi();//???
+    #endif
+}
+void connectToMqtt() {
+    #ifdef HA
+
+  Serial.println("\nConnecting to MQTT...");
+  mqttClient.connect();
+  #endif
+}
+
+void onMqttConnect(bool sessionPresent) {
+  #ifdef HA
+    //Serial.println("Connected to MQTT."); 
+    // subscribe ESP32 to following topics
+    //mqttClient.subscribe(BUTTON_TOPIC, 0); 
+    //mqttClient.subscribe(TEMPERATURE_TOPIC, 0); 
+    //mqttClient.subscribe(HUMIDITY_TOPIC, 0); 
+    //mqttClient.subscribe(PRESSURE_TOPIC, 0);
+    //mqttClient.subscribe(LUX_TOPIC, 0); 
+    //mqttClient.subscribe(TEMPTHRESHHOLD_TOPIC, 0); 
+  #endif
+}
+
+void publishMQTT(){
+  #ifdef HA
+    Serial.println(F("publishMQTT"));
+    //mqttClient.publish(strcat(location[1],TEMPERATURE_TOPIC), 0, false, (String(platform[1].temperature)).c_str());
+    mqttClient.publish(TEMPERATURE_TOPIC, 0, false, (String(platform[1].temperature)).c_str());
+    mqttClient.publish(HUMIDITY_TOPIC, 0, false, (String(platform[1].humidity)).c_str());
+    mqttClient.publish(PRESSURE_TOPIC, 0, false, (String(platform[1].pressure)).c_str()); 
+    mqttClient.publish(DOOR_TOPIC, 0, false, (String(platform[1].door)).c_str());
+    mqttClient.publish(DOOR_COUNT_TOPIC, 0, false, (String(platform[1].doorCount)).c_str());
+    mqttClient.publish(PIR_TOPIC, 0, false, (String(platform[1].pir)).c_str()); 
+    mqttClient.publish(LUX_TOPIC, 0, false, (String(platform[1].lux)).c_str());  
+    mqttClient.publish(AH2O_TOPIC, 0, false, (String(platform[1].aH2o)).c_str());  
+    mqttClient.publish(DH2O_TOPIC, 0, false, (String(platform[1].dH2o)).c_str());   
+ 
+    mqttClient.publish(SEND_FAILURES_TOPIC, 0, false, (String(platform[1].sendFailures)).c_str()); 
+
+    mqttClient.publish(SONIC_TOPIC, 0, false, (String(platform[2].sonic)).c_str());    
+    mqttClient.publish(HATCH_TOPIC, 0, false, (String(platform[3].door)).c_str());
+
+    mqttClient.publish(HUB_TEMPERATURE_TOPIC, 0, false, (String(platform[0].temperature)).c_str());
+    mqttClient.publish(HUB_HUMIDITY_TOPIC, 0, false, (String(platform[0].humidity)).c_str());
+    mqttClient.publish(HUB_PRESSURE_TOPIC, 0, false, (String(platform[0].pressure)).c_str());
+
+        platform[1].doorCount=0;
+        //platform[0].pir=0;
+        platform[1].pir=0;
+        platform[1].sendFailures=0;
+  #endif
+}
+
+  #ifdef HA
+
+
+void onMqttDisconnect(AsyncMqttClientDisconnectReason reason) {
+  Serial.println("Disconnected from MQTT.");
+  if (WiFi.isConnected()) {
+    xTimerStart(mqttReconnectTimer, 0);
+  }
+}
+
+void onMqttSubscribe(uint16_t packetId, uint8_t qos) {
+  Serial.println("Subscribe acknowledged.");
+}
+
+void onMqttUnsubscribe(uint16_t packetId) {
+  Serial.println("Unsubscribe acknowledged.");
+}
+
+void onMqttPublish(uint16_t packetId) {
+  Serial.print("onMqttPublish packet ID = ");Serial.println(packetId);
+
+}
+
+// Modify this function to handle what happens when you receive a push message on a specific topic
+void onMqttMessage(char* topic, char* payload, AsyncMqttClientMessageProperties properties, size_t len, size_t index, size_t total) {
+/*  
+  static float reptTempF = 0;
+  static float reptHumidity = 0;
+  static float reptPressure = 0;
+  static float reptLight = 0;
+  static int reptLedState = 0;  
+  String messageTemp;
+  
+  for (int i = 0; i < len; i++) {
+    messageTemp += (char)payload[i];
+  }
+  
+  if (strcmp(topic, BUTTON_TOPIC) == 0) {
+    reptLedState = messageTemp.toInt();
+    //displayButtonState(reptLedState); 
+  }
+  else if (strcmp(topic, TEMPERATURE_TOPIC) == 0){
+  reptTempF = messageTemp.toFloat();
+  }
+  else if (strcmp(topic, HUMIDITY_TOPIC) == 0){
+     reptHumidity = messageTemp.toFloat();
+  }
+  else if (strcmp(topic, PRESSURE_TOPIC) == 0){
+     reptPressure = messageTemp.toFloat();
+  }
+  else if (strcmp(topic, LUX_TOPIC) == 0){
+      reptLight = messageTemp.toFloat();
+      //setLightAlarm(reptLight);
+  }
+*/
+ // displayWeatherReport(reptTempF, reptHumidity, reptPressure, reptLight);
+}
+
+
+#endif
+
+#ifdef TELEGRAM
+//Handle what happens when you receive new messages
+void handleNewMessages(int numNewMessages) {
+  Serial.println("handleNewMessages");
+  Serial.println(String(numNewMessages));
+
+  for (int i=0; i<numNewMessages; i++) {
+    // Chat id of the requester
+    String chat_id = String(bot.messages[i].chat_id);
+    if (chat_id != CHAT_ID){
+      bot.sendMessage(chat_id, "Unauthorized user", "");
+      continue;
+    }
+    
+    // Print the received message
+    String text = bot.messages[i].text;
+    Serial.println(text);
+
+    String from_name = bot.messages[i].from_name;
+
+    if (text == "/start") {
+      String welcome = "ON - LED on \n";
+      welcome += "OFF - LED off \n";
+      //welcome += "STATE - sensor status \n";
+      welcome += "G - garage door\n";
+      bot.sendMessage(chat_id, welcome, "");
+    }
+
+   if (text == "ON") {
+      bot.sendMessage(chat_id, "LED state set to ON", "");
+      turnOnBoardLED();
+    }
+    
+    if (text == "OFF") {
+      bot.sendMessage(chat_id, "LED state set to OFF", "");
+      turnOffBoardLED();
+    }
+
+    if (text == "G") {
+      digitalWrite(pinGarage,1);
+      delay (2500);
+      digitalWrite(pinGarage,0);
+    }
+/*    if (text == "/state") {
+      if (digitalRead(ledPin)){
+        bot.sendMessage(chat_id, "LED is ON", "");
+      }
+      else{
+        bot.sendMessage(chat_id, "LED is OFF", "");
+      }
+    } 
+      
+    if (text == "/readings") {
+      String readings = getReadings();
+      bot.sendMessage(chat_id, readings, "");
+    }  */
+  }
+}
+#endif
