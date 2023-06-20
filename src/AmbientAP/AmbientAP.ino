@@ -1,7 +1,12 @@
 
 const char* APP = "AmbientAP ";
-const char* VERSION = "2023 v01.31";
+const char* VERSION = "2023 v0614";
 
+/*
+ * 3/23 create ID=4,5,6 pir bme
+ * use pin34 for pir on d1 mini esp32 was sonic sensor
+ * 3/25 cleanup pir, pirCount handling
+ */
 /////////////////////////////////////////////////////////////////////////////////////
 //
 // AmbientAP is a flexible, multi-featured sensor platform.  It can:
@@ -18,8 +23,8 @@ const char* VERSION = "2023 v01.31";
 //      door/window state
 //      pir motion sensors 
 //      ultrasonic sensors measure distance (car parking aid or car presence detector in garage for example) 
-//  5. report to 1 ESPNOW peer or up to 4 peers.
-//  6. sleep and wake up via a timer, an interrupt (such as a window being opened) or motion, or it can stay awake.
+//  5. report to 1 ESPNOW peer as a 1 to 1 peer or up to 4 peers as a 1 to many peer.
+//  6. sleep and wake up via a timer, an interrupt (such as a window being opened) or motion, or it can stay awake for continuous monitoring.
 //  7. sleep immediately after sending a successfully received ESPNOW message when configured as a 1 to 1 peer.
 //  8. operate with or without an OLED display.
 //  9. operate as one of many such devices using this software by assigning unique SensorID (1, 2, 3, etc.) to each sensor platform.
@@ -48,30 +53,44 @@ NOTES -  1. IF using MELife for ESP32 ESP-32S Development Board, use Arduino IDE
             -->OFF at GET humidity
             -->OFF at  sleep     
 */
-//////////////////////////////////////////////////////////////  
-//*******         Secrets file option          ***********//
-//////////////////////////////////////////////////////////////
-    #define gateway        //internet gateway (router) in use by destination device
-    #ifdef gateway
-      #include <secrets.h>  //need to know router ssid in order to use same channel
-    #endif  
 
 //////////////////////////////////////////////////////////////  
-  #define oledFormat2         // displays all sensors on OLED display
-  //#define h2oThreshhold  10 // wet - dry threshhold % for OLED display
-  #define h2oThreshhold  1    // wet - dry threshhold % for OLED display
+
 //*******         Compile-time Options           ***********//
 //////////////////////////////////////////////////////////////
+
   //*****************
-  // 1. Operatiing Modes
+  // 1. Secrets file option:
+  //*****************
+    #define gateway        //optional internet gateway (router) in use by destination device (Hub)
+    #ifdef gateway
+      #include <secrets.h>  //need to know router ssid in order to use same channel 
+    #endif  
+
+  //*****************
+  // 1. Select applicable hardware device below: 
+  // Board selection impacts pin assignments, setup of pin modes, 
+  // pwr on & off pulse duration, and onboard LED on/off states
+  //*****************
+  #define ESP32           //Recommended choice is esp32
+  //#define d1MiniESP32     //select ESP32 and d1MiniESP32 if diMiniESP32 is used
+  //#define ESP8266       //use for wemos D1 Mini.  
+                          //NOTE Multiple D1 Minis seem to interfere with one another and have limited wireless range
+  //*****************
+  // 2. Operatiing Modes
   //*****************
   #define printMode           //option: comment out if no printout to Serial monitor 
-  #define OLED_               //option: comment out if no oled display 128x64
-  //#define oledFormat1       // displays only temp humidity pressure on OLED display
-  bool reportFlag = true;     //issue report to HUB after startup, also when new data exists
+  #define OLED_               //option: comment out if no OLED display 128x64
+  #ifdef OLED_
+    //If enabled, choose one of the following OLED formats:
+    //#define oledFormat1       // displays only temp humidity pressure on OLED display
+    #define oledFormat2         // displays all sensors on optional OLED display
+    #define h2oThreshhold  1    // wet - dry threshhold % for OLED display  
+  #endif
+  bool reportFlag = true;     //issue report to HUB after startup, also when new data exists 
   
   //*****************                                                                                    
-  // 2. Timing Parameters
+  // 3. Timing Parameters
   //    NOTE: Wemos D1 Mini 8266 max sleep time is 71 minutes = 4260 seconds
   //*****************
 
@@ -79,19 +98,106 @@ NOTES -  1. IF using MELife for ESP32 ESP-32S Development Board, use Arduino IDE
   #define bootResetCount 6*24         //10 min/wakeup period x6 = 60 min x 24 = 24 hrs; i.e., reset once per day
 
   //*****************
-  //  3. Each sensor board needs unique display title and ssid; 
-  //  uncomment one triplet and comment // the others:
+  //  4. Select unique sensorID and set prameters for that ID
   //*****************
 
-//#define ID1  //gar door
-//  #define ID2    // car sonic
-  #define ID3  //hatch
-
+  //#define ID1    //FL gar door  ME #1 basement
+  //  #define ID2  //FL car sonic ME bedroom
+   #define ID3  //FL car hatch ME kitchen
+ // #define ID4      //FL ME bathroom
+//    #define ID5  //FL bath ME #13 bath
+  //#define ID6   //FL bath2
+  
   #ifdef ID1
-    //FL garage or ME basement for me 
     uint8_t sensorID = 1;
-    #define displayTitle " ~GARAGE 1~"  
+    #define displayTitle " ~AMBIENT 1~"  
     const char* ssid = "AMBIENT_1";
+  
+    const int sleepSeconds = 8*60;       //8*60 default sleep time in seconds; 0 if no sleep   
+    const long awakeSeconds = 2*60;      //2*60 default interval in seconds to stay awake as server; ignored if sleepSeconds = 0 
+    const long chillSeconds = 5;        //interval between readings if sleepSeconds = 0 slows serial monitor updates
+  
+  
+    //Select one platform temperature sensor:
+    //#define AHT10_        // Adafruit AHT10  //garage id 1
+    //#define BME_          // BME280 FL
+    #define DHT_            //ME DHT11,21,22, etc.
+    //#define SHT20_        // DFRobot SHT20
+  #endif
+
+  #ifdef ID2
+    uint8_t sensorID = 2;    
+    #define displayTitle " ~AMBIENT 2~"
+    const char* ssid = "AMBIENT_2";
+  
+    const int sleepSeconds = 8*60;       //8*60 default sleep time in seconds; 0 if no sleep   
+    const long awakeSeconds = 2*60;      //2*60 default interval in seconds to stay awake as server; ignored if sleepSeconds = 0 
+    const long chillSeconds = 10;        //interval between readings if sleepSeconds = 0 slows serial monitor updates
+  
+    //Select one platform temperature sensor:
+    //#define AHT10_        // Adafruit AHT10  //garage id 1
+    //#define BME_          // BME280
+    #define DHT_            // DHT11,21,22, etc.
+    //#define SHT20_        // DFRobot SHT20
+  #endif
+
+  #ifdef ID3
+    uint8_t sensorID = 3;
+    #define displayTitle " ~AMBIENT 3~"
+    const char* ssid = "AMBIENT_3";
+  
+    const int sleepSeconds = 8*60; //0; //600*60;       //8*60 default sleep time in seconds; 0 if no sleep   
+    const long awakeSeconds = 2*60;      //2*60 default interval in seconds to stay awake as server; ignored if sleepSeconds = 0 
+    const long chillSeconds = 5;        //interval between readings if sleepSeconds = 0 slows serial monitor updates
+  
+    //Select one platform temperature sensor:
+    //#define AHT10_        // Adafruit AHT10  //garage id 1
+    //#define BME_          // BME280
+    #define DHT_            // DHT11,21,22, etc.
+    //#define SHT20_        // DFRobot SHT20
+  #endif
+
+  #ifdef ID4
+    //FL kitchen used for temp hmu and pir motion to cause watermani standby
+    uint8_t sensorID = 4;
+    #define displayTitle "~AMBIENT4~"
+    const char* ssid = "AMBIENT_4";
+  
+    const int sleepSeconds = 8*60;       //8*60 default sleep time in seconds; 0 if no sleep   
+    const long awakeSeconds = 2*60;      //2*60 default interval in seconds to stay awake as server; ignored if sleepSeconds = 0 
+    const long chillSeconds = 5;        //interval between readings if sleepSeconds = 0 slows serial monitor updates
+  
+  
+    //Select one platform temperature sensor:
+    //#define AHT10_        // Adafruit AHT10  //garage id 1
+    //#define BME_          // BME280
+    #define DHT_            // DHT11,21,22, etc.
+    //#define SHT20_        // DFRobot SHT20
+  #endif
+
+  #ifdef ID5
+    //FL ME bath used for temp hum and pir motion to cause watermain standby
+    uint8_t sensorID = 5;
+    #define displayTitle "~AMBIENT5~"
+    const char* ssid = "AMBIENT_5";
+  
+    const int sleepSeconds = 8*60;       //8*60 default sleep time in seconds; 0 if no sleep   
+    const long awakeSeconds = 2*60;      //2*60 default interval in seconds to stay awake as server; ignored if sleepSeconds = 0 
+    const long chillSeconds = 5;        //interval between readings if sleepSeconds = 0 slows serial monitor updates
+  
+  
+    //Select one platform temperature sensor:
+    //#define AHT10_        // Adafruit AHT10  //garage id 1
+    //#define BME_          // BME280
+    #define DHT_            // DHT11,21,22, etc.
+    //#define SHT20_        // DFRobot SHT20
+  #endif
+
+  #ifdef ID6
+    //FL bath 2 used for temp hum and pir motion to cause watermain standby
+    uint8_t sensorID = 6;
+    #define displayTitle "~AMBIENT6~"
+    const char* ssid = "AMBIENT_6";
   
     const int sleepSeconds = 8*60;       //8*60 default sleep time in seconds; 0 if no sleep   
     const long awakeSeconds = 2*60;      //2*60 default interval in seconds to stay awake as server; ignored if sleepSeconds = 0 
@@ -104,60 +210,27 @@ NOTES -  1. IF using MELife for ESP32 ESP-32S Development Board, use Arduino IDE
     //#define DHT_            // DHT11,21,22, etc.
     //#define SHT20_        // DFRobot SHT20
   #endif
-
-  #ifdef ID2
-    // ME Bedroom or FL Lanai for me 
-    uint8_t sensorID = 2;    
-    #define displayTitle " ~SONIC 2~"
-    const char* ssid = "AMBIENT_2";
   
-    const int sleepSeconds = 0; //8*60;       //8*60 default sleep time in seconds; 0 if no sleep   
-    const long awakeSeconds = 2*60;      //2*60 default interval in seconds to stay awake as server; ignored if sleepSeconds = 0 
-    const long chillSeconds = 10;        //interval between readings if sleepSeconds = 0 slows serial monitor updates
-  
-    //Select one platform temperature sensor:
-    //#define AHT10_        // Adafruit AHT10  //garage id 1
-    //#define BME_          // BME280
-    //#define DHT_            // DHT11,21,22, etc.
-    //#define SHT20_        // DFRobot SHT20
-  #endif
-
-  #ifdef ID3
-    //FL or ME Kitchen for me 
-    uint8_t sensorID = 3;
-    #define displayTitle " ~HATCH 3~"
-    const char* ssid = "HATCH"
-  
-    const int sleepSeconds = 0; //600*60;       //8*60 default sleep time in seconds; 0 if no sleep   
-    const long awakeSeconds = 2*60;      //2*60 default interval in seconds to stay awake as server; ignored if sleepSeconds = 0 
-    const long chillSeconds = 5;        //interval between readings if sleepSeconds = 0 slows serial monitor updates
-  
-    //Select one platform temperature sensor:
-    //#define AHT10_        // Adafruit AHT10  //garage id 1
-    //#define BME_          // BME280
-    //#define DHT_            // DHT11,21,22, etc.
-    //#define SHT20_        // DFRobot SHT20
-  #endif
-
   //*****************
-  //  4. sensor inventory for each platform
+  //  5. sensor inventory for each platform
   //*****************
   // arrays to indicate types of sensors aboard each sensor platform (1=presnt, 0 = absent)
   // HUB  id=0; boards are 1,2,3.. example: temps[]={1,0,1,0} indicates hub and sensor #2 have temp sensors, sensor #1 and #3 do not.
-  uint8_t temps[] = {1,1,0,1}, hums[]={1,1,0,1}, dbms[]={1,0,0,0}, press[]={0,1,0,1}, bat[]={1,0,0,0};
-  uint8_t luxs[] = {0,0,0,0}, h2os[] = {0,0,0,0},doors[]={0,1,0,1},pirs[]={0,1,0,0},sonics[]={0,0,1,0};
-  
+
+ //   CASA_1:
+ //   #define numberOfPlatforms 7        // number of sensor platforms available  + 1 for HUB
+                                        //const char* location[] = {"hub","garage","sonic","hatch", "kitchen","bathroom","bathroom2,"spare"};
+ //   uint8_t temps[] = {1,1,0,0, 1,1,1,0}, hums[]=  {1,1,0,0, 1,1,1,0}, dbms[]= {1,0,0,0, 0,0,0,0}, press[]={1,0,0,0, 0,1,0,0}, bat[]=   {0,0,0,0, 0,0,0,0};
+ //   uint8_t luxs[] =  {0,1,0,0, 1,0,0,0}, h2os[] = {0,0,0,0, 0,0,0,0}, doors[]={0,1,0,0, 1,0,0,0}, pirs[]={0,1,0,0, 1,1,1,0}, sonics[]={0,0,1,0, 0,0,0,0};
+
+//    CASA_2:
+//    #define numberOfPlatforms 5       // number of sensor platforms available  + 1 for HUB
+                                        //const char* location[] = {"hub","basement","bedroom","kitchen","bathroom","spare","spare","spare"};
+    uint8_t temps[] = {1,1,1,1, 1,1,1,0}, hums[]=  {1,1,1,1, 1,1,1,0}, dbms[]= {1,0,0,0, 0,0,0,0}, press[]={0,0,0,0, 0,0,0,0}, bat[]=   {0,0,0,0, 0,0,0,0};
+    uint8_t luxs[] =  {0,1,0,1, 1,0,0,0}, h2os[] = {0,1,0,0, 0,0,0,0}, doors[]={0,0,1,1, 0,0,0,0}, pirs[]={0,1,0,1, 0,0,0,0}, sonics[]={0,0,0,0, 0,0,0,0};
+
   //*****************
-  // 5. Select one hardware device below and comment out the other: 
-  // Board selection impacts pin assignments, setup of pin modes, 
-  // pwr on & off pulse duration, and onboard LED on/off states
-  //*****************
-  #define ESP32           //Recommended choice is esp32
-  //#define ESP8266       //use for wemos D1 Mini.  
-                          //Multiple D1 Minis seem to interfere with one another and have limited range
-  
-  //*****************
-  // 5. Select one of the 3 following protocols for communication between HUB and sensor platforms; 
+  // 6. Select one of the 3 following protocols for communication between HUB and sensor platforms; 
   // ESPNOW_1to1 is preferred; NOTE: WIFI is a memory hog:
   //*****************
   //#define WIFI          //set up as wifi server w/o router
@@ -170,8 +243,8 @@ NOTES -  1. IF using MELife for ESP32 ESP-32S Development Board, use Arduino IDE
   #ifdef ESPNOW_1to1
     //uint8_t broadcastAddress[] = {0xAC, 0x67, 0xB2, 0x2B, 0x6D, 0x00};  //example for esp32 #7 MAC Address AC:67:B2:2B:6D:00
     //uint8_t broadcastAddress[] = {0x8C, 0xAA, 0xB5, 0x85, 0x6A, 0x68};  //esp32 #12 Mac Address 8C:AA:B5:85:6A:68
-     uint8_t broadcastAddress[] = {0xA8, 0x03, 0x2A, 0x74, 0xBE, 0x8C};  //LILLYGO MAC Address A8:03:2A:74:BE:8C
-    //uint8_t broadcastAddress[] = {0x40, 0x91, 0x51, 0x30, 0x62, 0x94};   // lillygo2: 40:91:51:30:62:94
+     //uint8_t broadcastAddress[] = {0xA8, 0x03, 0x2A, 0x74, 0xBE, 0x8C};  // FL LILLYGO MAC Address A8:03:2A:74:BE:8C
+    uint8_t broadcastAddress[] = {0x40, 0x91, 0x51, 0x30, 0x62, 0x94};   // ME lillygo2: 40:91:51:30:62:94
   #endif
   #ifdef ESPNOW_1toN
     //comment these out and use your own AmbientHUB or other peer MAC addresses:
@@ -183,14 +256,14 @@ NOTES -  1. IF using MELife for ESP32 ESP-32S Development Board, use Arduino IDE
   #endif
   
   //*****************                                                                                    //*****************
-  // 6. ESPNOW Parameters (if ESPNOW is selected)
+  // 7. ESPNOW Parameters (if ESPNOW is selected)
   //*****************
   int espNowAttempts=0;            //number of ESPNOW transmission attempts so far (do not adjust)
   #define espNowAttemptsAllowed 30  //number of unsuccessful attempts allowed before sleeping if sleepSeconds > 0
   int espNowDelay = 50;         //delay in msec between espnow attempts
 
   //*****************
-  // 7. ESP32 PIN DEFINITIONS
+  // 8. ESP32 PIN DEFINITIONS
   //    note: esp32 set pin 15 low prevents startup log on Serial monitor - 
   //          good to know for battery operation
   //    From 363-ESP32 Pri 1 pins - The guy with the swiss accent:
@@ -203,9 +276,18 @@ NOTES -  1. IF using MELife for ESP32 ESP-32S Development Board, use Arduino IDE
   //*****************
   #ifdef ESP32
     #define pinBoardLED 2               //onboard LED
-    #define pinPir 39                   //HC-SR501 PIR sensor                
+    #ifndef d1MiniESP32
+      #define pinPir 39                 //HC-SR501 PIR sensor       for full esp32    
+      #define pinPhotoCell 34 
+    #endif     
+    #ifdef d1MiniESP32
+      #define pinPir 34                 //HC-SR501 PIR sensor     for d1 mini esp32 
+      #define pinPhotoCell 33           
+    #endif  
+    #define pinSonicEcho 23                                       
+    #define pinSonicTrigger 23          
     #define pinDoor 35                  //door wired to magnetic reed switch, NO & C connected 
-                                        //  to pinDoor and ground; 100K pullup R to pinDoor & 3.3v
+                                        //  to pinDoor and ground; 1K pullup R to pinDoor & 3.3v
                                         //  pinDoor = 1 = closed, 0 = open.
                                         //NOTE if this pin is changed, 
                                         //  change setupWakeupConditions as well.
@@ -214,19 +296,16 @@ NOTES -  1. IF using MELife for ESP32 ESP-32S Development Board, use Arduino IDE
                                         //   * Hiletgo LM393 FC37 moisture monitor
                                         
     #define pinAh2o 32                  // touchpin                                
-    #define pinPhotoCell 34             // analog input 
+    //#define pinPhotoCell 34             // analog input 
                                         // esp32 analog input; photocell connected to GPIO pin & gnd, 
                                         // 10K pullup resister, i.e., connected to GPIO pin & 3.3v
     #define pinSDA 21                   // ESP 12C Bus SDA for BME temp sensor, OLED, etc
     #define pinSCL 22                   // ESP 12C Bus SCL for BME temp sensor, OLED, etc
-
-    #define pinSonicTrigger 23          
-    #define pinSonicEcho 33
     
   #endif
  
   //*****************
-  // 8. ESP8266 D1 Mini PIN DEFINITIONS
+  // 9. ESP8266 D1 Mini PIN DEFINITIONS
   //***************** 
   #ifdef ESP8266
     #define pinBoardLED 2               //onboard LED
@@ -237,7 +316,7 @@ NOTES -  1. IF using MELife for ESP32 ESP-32S Development Board, use Arduino IDE
   #endif
 
   //*****************
-  // 9. Temp Sensor Libraries
+  // 10. Temp Sensor Libraries
   //*****************
   #ifdef AHT10_
     #include <Adafruit_AHT10.h>
@@ -281,16 +360,17 @@ NOTES -  1. IF using MELife for ESP32 ESP-32S Development Board, use Arduino IDE
       uint8_t dH2o;            // 0 or 1 digital readout 0=dry  (normal state)
       uint8_t doorCount;       // # times door opened and closed after previous report.
       uint8_t door;            // door = 0 when closed, 1 when open
-      uint8_t pir;             // # times pir detected motion after previous report
-      uint16_t sonic;           // 0=absent 1=present
+      uint8_t pir;             // pir = 0 no motion, 1 for motion 
+      uint16_t sonic;          // 0=absent 1=present
       uint8_t sendFailures;    // # failed attempts to send via espNow
+      uint8_t pirCount;        // # times pir detected motion after previous report via cellular
   } platforms;
   
   #ifdef ESP32  //store the reaadings persistently if esp32
-    RTC_DATA_ATTR platforms sensorData ={sensorID,0,0,0,0,0,0,0,0,0,0,0};     
+    RTC_DATA_ATTR platforms sensorData ={sensorID,0,0,0,0,0,0,0,0,0,0,0,0};     
   #endif
   #ifdef ESP8266
-    platforms sensorData = {sensorID,0,0,0,0,0,0,0,0,0,0,0};   to initialize  
+    platforms sensorData = {sensorID,0,0,0,0,0,0,0,0,0,0,0,0};   to initialize  
   #endif  
   uint8_t aH2oMeasured = 0; // sensor measurement prior to preocessing
   RTC_DATA_ATTR uint8_t priorDoor = 0; //last door status = 0 (closed) or 1 (open)
@@ -376,90 +456,7 @@ NOTES -  1. IF using MELife for ESP32 ESP-32S Development Board, use Arduino IDE
     #endif  
   }
   */
-/////////////////////////////////////
-//*****       Setup()      *********
-////////////////////////////////////
-void setup(){
-  //Read sensors, 1) setup wifi server OR 2) transmit data using ESPNOW and go to sleep in less than 2 sec!
-  delay(200);                   //ESP32 Bug workaround -- don't reference rtc ram too soon!!
-  serialPrintVersion();         //Show startup info to serial monitor if printMode enabled
-  setupPinModes();
-  wakeupID = readWakeupID();    //process wakeup sources & return wakeup indicator
-  restartIfTime();              //restart ea bootcount>bootResetCount if timer wakeup else increment bootCount 
-  setupOledDisplay();           //prepare the oled display if #define includeOled is enabled
-  displayVersion();             //display version and blink onboard led 5 sec on bootCount=1
-  turnOnBoardLED();             //illuminate the on-board LED
-  //attachInterrupt(digitalPinToInterrupt(pinPir), pirInterrupt, RISING);  //in case you want to try it!
-  //attachInterrupt(digitalPinToInterrupt(pinDoor), doorChangeInterrupt, CHANGE); //in case you want to try it!
-  setupSensors();               //initialize sensors 
-  readDoor();                   //read door status. NOTE door is wakeup trigger, also polled during loop
-  //readPir();                  //read pir status. NOTE pir is wakeup trigger; updated during readWakeupID
-  readAh2o();                   //read analog flood level value
-  readDh2o();                   //read digital flood indicater
-  readPhotoCell();              //read photocell value
-  readSonic();
-  readTemperature();            //valid data updates temperature and temp; invalid updates only temp with  "--"
-  readHumidity();               //valid data updates humidity and hum; invalid updates only hum with  "--"
-  readPressure();               //valid data updates pressure and pres; invalid updates only pres with  "--"              
-  printSensorData();
-  displayStatus();              //display latest valid sensor readings on oled display if #define incledeOled is enabled
-  
-  setupESPNOW_1to1();           //format data and send espnow msg to a single peer if #define ESPNOW_1to1 is enabled; 
-                                //successful data transfer will cause the system to sleep if sleepSeconds > 0
- 
-  setupESPNOW_1toN();           //format data and send espnow msg to multiple peers if #define ESPNOW_1toN is enabled; 
-                                //will NOT cause system to go to sleep if sleepSeconds>0 and data was received successfully
 
-  setupWifiServer();            //initialize wifi server if #define WIFI is enabled
-
-  turnOffBoardLED();            //turn off the board LED when setup complete
-}
-
-//////////////////////////////////
-//*****      Loop()      *********** 
-/////////////////////////////////
-void loop(){                  //Execute repeatedly if system did not go to sleep during setup:
-  readDoor();
-  //readPir();                //read pir status via wakeup rather than polling
-  readAh2o();
-  readDh2o();
-  readPhotoCell();  
-
-  if(chillTimeIsUp(chillSeconds*1000)==1){   //slow down loop for serial monitor readability + sensor R&R   
-
-    if (sleepSeconds == 0){   //if unit does not sleep, read all sensors if chillSeconds has elapsed since last reading
-      //but first, check for reboot conditions 
-      bootCount++;            //increment counter
-      if (bootCount>=bootResetCount){
-        ESP.restart();        //Reboot the esp32 to prevent memory issues
-      }                              
-      readSonic();            //sonic gives false readings if triggered too quickly     
-      readTemperature();      //valid data updates temperature and temp; invalid updates only temp with  "--"
-      readHumidity();         //valid data updates humidity and hum; invalid updates only hum with  "--"
-      readPressure();         //valid data updates pressure and pres; invalid updates only pres with  "--"                 
-      displayStatus();        //display latest vald sensor readings on oled display if #define incledeOled is enabled
-    }else{ 
-                       
-      //Set wakeup conditions and go to sleep if it is nap time
-      if (sensorNapTime(awakeSeconds*1000) ==1 ){        //determine if awakeSeconds have elapsed
-        setupWakeupConditions();  //interrupt if door or PIR state changes
-        #ifdef printMode        //issue sleep message if #define printMode is enabled
-          Serial.println(F(" "));Serial.print(F("sleeping "));Serial.print(sleepSeconds);Serial.println(F(" seconds..zzzz"));
-        #endif 
-        ESP.deepSleep(sleepSeconds * uS_TO_S_FACTOR);   //go to sleep for sleepSeconds 
-      }
-    }
-    reportFlag=true;          //resend sensor data every chillSeconds even if no change; 
-                              //send in main loop in case multiple tries are necessary.
-    printSensorData();
-  }
-  if (reportFlag){            //Send data each time it changes as indicated by reportFlag
-    sendEspNow_1to1();        //format data and send espnow msg to a single peer if #define ESPNOW_1to1 is enabled; 
-                              //successful data transfer will cause the system to sleep if sleepSeconds > 0                                
-
-    sendEspNow_1toN();        //format data and send espnow msg to multiple peers if #define ESPNOW_1toN is enabled; 
-  }                                
-}                             //repeat at top of the loop
 //*********************************
 void blinkBoardLED(int sec){      // Blink board LED for sec seconds at .5 second intervals
   #ifdef printMode 
@@ -634,6 +631,7 @@ void displayVersion(){
       //data sent success; reset count parameters
       sensorData.doorCount = 0;
       sensorData.pir = 0;
+      sensorData.pirCount = 0;
       sensorData.sendFailures=0;
       
       if(sleepSeconds==0){
@@ -945,8 +943,8 @@ void readPir(){
     #endif
 
     //pir = 0 when no motion (normal state)
-    sensorData.pir = digitalRead(pinPir) + sensorData.pir ;
-    //pirCount=pirCount+sensorData.pir;    
+    sensorData.pir = digitalRead(pinPir); //+ sensorData.pir ;
+    sensorData.pirCount=sensorData.pirCount+sensorData.pir;    
   }  
   #ifdef printMode
     Serial.println(sensorData.pir);
@@ -1056,8 +1054,12 @@ uint8_t readWakeupID(){
        #endif
        return 0;
     case ESP_SLEEP_WAKEUP_EXT1 :      
-       sensorData.pir ++; //= sensorData.pir + digitalRead(pinPir);
-       //printSensorData();
+       sensorData.pir = digitalRead(pinPir);  //in case we need to reset the interrupt
+       sensorData.pir = 1;                    //in case we we are too slow reading the interrupt and it no longer is active
+       sensorData.pirCount ++;
+       #ifdef printMode
+         printSensorData();
+       #endif  
        return 1;
     case ESP_SLEEP_WAKEUP_TIMER : return 2;
     case ESP_SLEEP_WAKEUP_TOUCHPAD : return 3;
@@ -1298,7 +1300,7 @@ void setupPinModes(){
     pinMode (pinDoor, INPUT);
   }  
   if (pirs[sensorID]==1){
-    pinMode (pinPir, INPUT);
+      pinMode (pinPir, INPUT);
   }
   if (luxs[sensorID]==1){
     pinMode (pinPhotoCell, INPUT);
@@ -1367,11 +1369,15 @@ void setupWakeupConditions(){
   //set wakeup conditions based on door & PIR sensor
   #ifdef printMode
     Serial.print(F("*setupWakeupConditions*"));
-    Serial.print(F(" door --> "));Serial.print(!digitalRead(pinDoor));
-    Serial.println(F("; pir --> 1"));//Serial.println(sensorData.pir);
+    if(doors[sensorID]==1){          //if this sensor platform has a door sensor:    
+      Serial.print(F(" door --> "));Serial.print(!digitalRead(pinDoor));
+    }
+    if(pirs[sensorID]==1){                  //if this sensor platform has a pir sensor:
+      Serial.println(F("; pir --> 1"));//Serial.println(sensorData.pir);
+    }  
   #endif 
 
-  //Set up door causes wakeup when opened or closeed
+  //Set up door to cause wakeup when opened or closeed
   if(doors[sensorID]==1){          //if this sensor platform has a door sensor:
     if (digitalRead(pinDoor)==1){  //determine wakeup condition based on door closed or open
       esp_sleep_enable_ext0_wakeup(GPIO_NUM_35,0); //0 = High OPEN 1 = Low CLOSED
@@ -1380,13 +1386,22 @@ void setupWakeupConditions(){
     } 
   }  
 
-  //set up pir causes wakeup when movement detected
-  if(pirs[sensorID]==1){                //if this sensor platform has a pir sensor:
-    #define wakeupBitmask 0x4000000000  //wakeup on pir gpio 39
+  //set up pir to cause wakeup when movement detected
+  if(pirs[sensorID]==1){                  //if this sensor platform has a pir sensor:
+    #ifndef d1MiniESP32
+      #ifdef ESP32
+        //#define wakeupBitmask 0x4000000000  //wakeup on pir gpio 39 full esp32 ?? 4 sb 8?
+        #define wakeupBitmask 0x8000000000  //wakeup on pir gpio 39 full esp32 
+      #endif
+    #endif
+    #ifdef d1MiniESP32      
+      #define wakeupBitmask 0x400000000    //wakeup on pir gpio 34 d1 mini esp32
+    #endif  
     esp_sleep_enable_ext1_wakeup(wakeupBitmask,ESP_EXT1_WAKEUP_ANY_HIGH);
   }  
 }      
-
+  #define ESP32           //Recommended choice is esp32
+  //#define d1MiniESP32
 //*************************************
 void setupWifiServer(){
   //Initializes WIFI server for access to clients that issue GET commands to retrieve sensor data
@@ -1466,3 +1481,88 @@ void turnOffBoardLED(){
     digitalWrite(pinBoardLED, LOW);
   #endif 
 }    
+
+/////////////////////////////////////
+//*****       Setup()      *********
+////////////////////////////////////
+void setup(){
+  //Read sensors, 1) setup wifi server OR 2) transmit data using ESPNOW and go to sleep in less than 2 sec!
+  delay(200);                   //ESP32 Bug workaround -- don't reference rtc ram too soon!!
+  setupPinModes();
+  wakeupID = readWakeupID();    //process wakeup sources & return wakeup indicator
+  serialPrintVersion();         //Show version and startup/wakeup info to serial monitor if printMode enabled
+  restartIfTime();              //restart ea bootcount>bootResetCount if timer wakeup else increment bootCount 
+  setupOledDisplay();           //prepare the oled display if #define includeOled is enabled
+  displayVersion();             //display version on OLED and blink onboard led 5 sec on bootCount=1
+  turnOnBoardLED();             //illuminate the on-board LED
+  //attachInterrupt(digitalPinToInterrupt(pinPir), pirInterrupt, RISING);  //in case you want to try it!
+  //attachInterrupt(digitalPinToInterrupt(pinDoor), doorChangeInterrupt, CHANGE); //in case you want to try it!
+  setupSensors();               //initialize sensors 
+  readDoor();                   //read door status. NOTE door is wakeup trigger, also polled during loop
+  //readPir();                  //read pir status. NOTE pir is wakeup trigger; updated during readWakeupID
+  readAh2o();                   //read analog flood level value
+  readDh2o();                   //read digital flood indicater
+  readPhotoCell();              //read photocell value
+  readSonic();
+  readTemperature();            //valid data updates temperature and temp; invalid updates only temp with  "--"
+  readHumidity();               //valid data updates humidity and hum; invalid updates only hum with  "--"
+  readPressure();               //valid data updates pressure and pres; invalid updates only pres with  "--"              
+  printSensorData();
+  displayStatus();              //display latest valid sensor readings on oled display if #define incledeOled is enabled
+  
+  setupESPNOW_1to1();           //format data and send espnow msg to a single peer if #define ESPNOW_1to1 is enabled; 
+                                //successful data transfer will cause the system to sleep if sleepSeconds > 0
+ 
+  setupESPNOW_1toN();           //format data and send espnow msg to multiple peers if #define ESPNOW_1toN is enabled; 
+                                //will NOT cause system to go to sleep if sleepSeconds>0 and data was received successfully
+
+  setupWifiServer();            //initialize wifi server if #define WIFI is enabled
+
+  turnOffBoardLED();            //turn off the board LED when setup complete
+}
+
+//////////////////////////////////
+//*****      Loop()      *********** 
+/////////////////////////////////
+void loop(){                  //Execute repeatedly if system did not go to sleep during setup:
+  readDoor();
+  //readPir();                //read pir status via wakeup rather than polling
+  readAh2o();
+  readDh2o();
+  readPhotoCell();  
+
+  if(chillTimeIsUp(chillSeconds*1000)==1){   //slow down loop for serial monitor readability + sensor R&R   
+
+    if (sleepSeconds == 0){   //if unit does not sleep, read all sensors if chillSeconds has elapsed since last reading
+      //but first, check for reboot conditions 
+      bootCount++;            //increment counter
+      if (bootCount>=bootResetCount){
+        ESP.restart();        //Reboot the esp32 to prevent memory issues
+      }                              
+      readSonic();            //sonic gives false readings if triggered too quickly     
+      readTemperature();      //valid data updates temperature and temp; invalid updates only temp with  "--"
+      readHumidity();         //valid data updates humidity and hum; invalid updates only hum with  "--"
+      readPressure();         //valid data updates pressure and pres; invalid updates only pres with  "--"                 
+      displayStatus();        //display latest vald sensor readings on oled display if #define incledeOled is enabled
+    }else{ 
+                       
+      //Set wakeup conditions and go to sleep if it is nap time
+      if (sensorNapTime(awakeSeconds*1000) ==1 ){        //determine if awakeSeconds have elapsed
+        setupWakeupConditions();  //interrupt if door or PIR state changes
+        #ifdef printMode        //issue sleep message if #define printMode is enabled
+          Serial.println(F(" "));Serial.print(F("sleeping "));Serial.print(sleepSeconds);Serial.println(F(" seconds..zzzz"));
+        #endif 
+        ESP.deepSleep(sleepSeconds * uS_TO_S_FACTOR);   //go to sleep for sleepSeconds 
+      }
+    }
+    reportFlag=true;          //resend sensor data every chillSeconds even if no change; 
+                              //send in main loop in case multiple tries are necessary.
+    printSensorData();
+  }
+  if (reportFlag){            //Send data each time it changes as indicated by reportFlag
+    sendEspNow_1to1();        //format data and send espnow msg to a single peer if #define ESPNOW_1to1 is enabled; 
+                              //successful data transfer will cause the system to sleep if sleepSeconds > 0                                
+
+    sendEspNow_1toN();        //format data and send espnow msg to multiple peers if #define ESPNOW_1toN is enabled; 
+  }                                
+}                             //repeat at top of the loop
