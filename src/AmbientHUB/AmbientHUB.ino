@@ -1,15 +1,15 @@
 
 const char* APP = "AmbientHUB ";
-const char* VERSION = "2023 v0619";
+const char* VERSION = "2023 v0625";
 
-/* 3/24 expand # clients, and MQTT topics for kitchen and bathroom
- *  3/25 implement pirCount separate from pir
- *  disabled garage
- *  
- * 613 remove gps option 
- * fix alerts # sensor in ift arrays
- * remove intermediate mode
- * 613a implement CASA_1, 2
+/* 6/22 Fix end of publishMQTT do not reset doorCount, PIR, etc.
+ *  fix SECRET references
+ *  add printMode qualifier where missing
+ *  remove ATMode option
+ *  simplify secrets.h description
+ *  reorganize heading & comments
+ *  WIFI -> HTTPGET
+ *  use library fona
 */
 /////////////////////////////////////////////////////////////////////////////////////
 //
@@ -44,94 +44,84 @@ const char* VERSION = "2023 v0619";
 //////////////////////////////////////////////////////////////  
 //*******     Setup secrets.h file for:        ***********//
 //               a. IFTTT webhook API Key 
-//               b. adafruit mqtt username & key
-//               c. home assistant parameters
+//               b. adafruit mqtt username & key (Optional)
+//               c. wifi credentials (Optional - necessary only if wifi, home assistant, or telegram are to be used)
+//               d. home assistant credentials (Optional) 
+//               e. Telegram credentials (Optional)
+//               f. HUB MAC Address
 //////////////////////////////////////////////////////////////
 
-  //  IFTTT OPTIONS: 
-  //         1. Replace the YOUR_IFTTT_KEY_GOES_HERE phrase in the #define SECRET_IFTTT_HB_URL... statement below 
-  //            OR
-  //         2. include the #define SECRET_IFTTT_HB_URL... statement in a secrets.h file. 
-  //            
+      #include <secrets.h>   // secrets.h file contents follow:
+  
+  //  IFTTT:     
   //  #define SECRET_IFTTT_HB_URL "http://maker.ifttt.com/trigger/HB/with/key/YOUR_IFTTT_KEY_GOES_HERE"  //heartbeat event HB
-      #include <secrets.h> 
-  //
-  //  AdaFruitIO MQTT OPTIONS
-  //         1. Replace YOUR_USERNAME phrase in the #define SECRET_adaMQTT_USERNAME statement below,
-  //            AND
-  //         2. Replace the YOUR_KEY field in the #define SECRET_adaMQTT_KEY statement below,  
-  //
+ 
+  //  AdaFruitIO MQTT:
   //  #define SECRET_adaMQTT_USERNAME    "YOUR ADAFRUIT.IO USERNAME HERE"
   //  #define SECRET_adaMQTT_KEY         "YOUR ADAFRUIT.IO MQTT KEY HERE"
-  //
-  //            OR
-  //         3. include the #define SECRET_adaMQTT_USERNAME... statement in the secrets.h file. 
-  //            AND
-  //         4. include the #define SECRET_adaMQTT_KEY... statement in the secrets.h file. 
-  // 
-  //  Home Assistant OPTIONS
-  //         1. Replace the parameters in quotes below
-  //
+  
+  //  WIFI:
+  //  #define SECRET_WIFI_SSID           "Your SSID here"
+  //  #define SECRET_WIFI_PASSWORD       "Your WIFI password here" 
+  
+  //  Home Assistant:
   //  #define SECRET_MQTT_HOST "YOUR HOME ASSISTANT URL HERE" 
   //  #define SECRET_MQTT_PORT "YOUR HOME ASSISTANT PORT HERE"
   //  #define SECRET_MQTT_USER_NAME "YOUR USERNAME HERE"
   //  #define SECRET_MQTT_USER_PWD  "YOUR PASSWORD HERE"
   
-  //            OR
-  //         2. include the above definitions in the secrets.h file
-  //
-               
+  //  Telegram BOT:
+  //  #define SECRET_BOTTOKEN      "your Bot Token here (Get from Botfather)"  // your Bot Token (Get from Botfather)
+  //  #define SECRET_CHAT_ID       "your chatID here"
+
+  //  HUB MAC Address:
+  //  uint8_t SECRET_broadcastAddress[] = {0x8C, 0xAA, 0xB3, 0x85, 0x6A, 0x67};  //example for Mac Address 8C:AA:B3:85:6A:67
+
 //////////////////////////////////////////////////////////////  
 //*******         Compile-time Options           ***********//
+//        (Disable unwanted options with leading //)
 //////////////////////////////////////////////////////////////
-
-  //*****************************
-  // 1. Select one CASA and any applicable operating mode:
-  //*****************************
-  //#define CASA_1
-  #define CASA_2
-  
-  #define HA                   // Enable to ommunicate with Home Assistant
-  //#define TELEGRAM             // Enable telegram if you pass comands to ESP32 
-
+  #define iFTTTMode           // enables use of ifttt; get a free account at www.ifttt.com.  This will enable passing
+                              // sensor values to multiple gmail accounts and to google sheets.
+  #define adaMQTT             // enables use of adafruit mqtt publish; get a free account at www.adafruit.io, then 
+                              // use this account to access ifttt for a more reliable experience than ifttt direct.
+  #define HA                  // Enable ommunication with Home Assistant for enhanced real time sensor updates and monitoring via local wifi.
+  //#define TELEGRAM          // Enable telegram if you pass comands to ESP32 via WIFI (for exxample, to close the garage door from away)
+  #define dweetMode           // enables use of dweet as a backup to ifttt and adafruit.  www.Dweet.com is free.  The cellular SIM imei is used as a key to
+                              // log and monitor sensor values.
+   
   //*******************************   
-  // 2. Select debug aids/monitors:
+  // 1. Select debug aids/monitors:
   //*******************************
   #define OLED_               // 64x128 pixel OLED display if hub uses one
   #define printMode           // comment out if you don't want brief status display of sensor readings, threshholds and cellular interactions to pc
   //#define testMode          // uncomment for verbose test messages to status monitor for heavy debug / verification
-  bool reportFlag = true;     //issue report after startup, also when new data exists ????
-  
-  //******************************
-  // 3. Communication Modes depend 
-  //    on the application selected in step 1:
-  //******************************
-  
+  #define cellularMode        //  enables a cellular connection; // = no connection (for debugging code without racking up cellular costs)
+  //#define testCellular      // comment out if you don't want to enable test transmission to dweet, ifttt at initial startup
+
+  //*****************************
+  // 2. Select one CASA (reporting site which may have unique configuration):
+  //*****************************
+  //#define CASA_1            // Home #1
+  #define CASA_2              // Home #2
+
   #ifdef CASA_1
     char dataTag[] = "FL";   // <<< unique prefix to identify source of data >
      
-    //Data Inputs:
+    //Data Inputs - select one of these two:
     #define ESPNOW      // to receive or send by espnow, A lightweight communication protocol by which sensors push data to the hub based on MAC address
-    //#define WIFI      // A slower system by which the HUB polls the sensor via http GET request to pull data; WIFI is a memory hog.
+    //#define HTTPGET   // A slower system by which the HUB polls the sensor via http GET request to pull data; WIFI is a memory hog.
 
-    #define cellularMode        //  enables a cellular connection; // = no connection (for debugging code without racking up cellular costs)
     #ifdef cellularMode
-      #define adaMQTT             // enables use of adafruit mqtt publish; // = disable MQTT
-      //#define adaMQTT_Subscribe //needs work!   // enables use of adafruit mqtt subscribe; // = disable 
-      #define iFTTTMode           // enables use of ifttt; // = disable IFTTT
-      #define dweetMode           // enables use of dweet; // = disable dweet
-      //#define simSleepMode        // shut off sim modem between readings 
-      //#define testCellular      // comment out if you dont want to enable test transmission to dweet, ifttt at initial startup
-      //#define ATMode            // uncomment to use AT commands as workarounds to higher level FONA commands improves success rate thru ifttt 
+      //#define simSleepMode   // shut off sim modem between readings if HUB does not sleep
     #endif
     
-    #define alertMode           //  enables postAlert when a measurement crosses threshhold; // = no alert
+    #define alertMode          //  enables postAlert when a measurement crosses threshhold; // = no alert
 //  #define GARAGE
 
     //*****************
     // Timing Parameters
-    //*****************
-    
+    //***************** 
     const int espSleepSeconds = 0; //48*60;     // or 0; heartbeat period OR wakes up out of sleepMode after sleepMinutes           
     const long espAwakeSeconds = 12*60;    // interval in seconds to stay awake as HUB; you dont need to change this if espSleepSeconds = 0 indicating no sleep
     int heartbeatMinutes = 60;             // 10 heartbeat delay after HUB awakens.  this needs to be at least 2 minutes less than espAwakeSeconds
@@ -145,22 +135,16 @@ const char* VERSION = "2023 v0619";
     #define bootResetCount 24         //reset ESP once per day
   #endif  //CASA_1
 
+//***************************************************************************************
   #ifdef CASA_2
     char dataTag[] = "ME";   // <<< unique prefix to identify source of data >
      
     //Data Inputs:
     #define ESPNOW      // to receive or send by espnow, A lightweight communication protocol by which sensors push data to the hub based on MAC address
-    //#define WIFI      // A slower system by which the HUB polls the sensor via http GET request to pull data; WIFI is a memory hog.
+    //#define HTTPGET   // A slower system by which the HUB polls the sensor via http GET request to pull data; WIFI is a memory hog.
 
-    #define cellularMode        //  enables a cellular connection; // = no connection (for debugging code without racking up cellular costs)
     #ifdef cellularMode
-      #define adaMQTT             // enables use of adafruit mqtt publish; // = disable MQTT
-      //#define adaMQTT_Subscribe //needs work!   // enables use of adafruit mqtt subscribe; // = disable 
-      #define iFTTTMode           // enables use of ifttt; // = disable IFTTT
-      #define dweetMode           // enables use of dweet; // = disable dweet
-      //#define simSleepMode        // shut off sim modem between readings 
-      //#define testCellular      // comment out if you dont want to enable test transmission to dweet, ifttt at initial startup
-      //#define ATMode            // uncomment to use AT commands as workarounds to higher level FONA commands improves success rate thru ifttt 
+      //#define simSleepMode        // shut off sim modem between readings if HUB does not sleep
     #endif
     
 //  #define alertMode           //  enables postAlert when a measurement crosses threshhold; // = no alert
@@ -183,140 +167,19 @@ const char* VERSION = "2023 v0619";
 
   #endif  //CASA_2
 
-
-    #ifdef HA
-      #define mqTTMode
-      //****************wifi stuff
-      #include <WiFi.h>
-      #include "WiFiMulti.h"
-      #include <HTTPClient.h>
-      #ifdef TELEGRAM
-        #include <WiFiClientSecure.h>
-        #include <UniversalTelegramBot.h> // Universal Telegram Bot Library written by Brian Lough: https://github.com/witnessmenow/Universal-Arduino-Telegram-Bot
-        #include <ArduinoJson.h>
-        // Initialize Telegram BOT
-        #define BOTtoken SECRET_BOTTOKEN      
-        #define CHAT_ID SECRET_CHAT_ID   
-        WiFiClientSecure client;
-        UniversalTelegramBot bot(BOTtoken, client);
-        //Checks for new messages every 1 second.
-        int botRequestDelay = 1000;
-        unsigned long lastTimeBotRan;      
-      #endif
-      #define WIFI_SSID SECRET_WIFI_SSID
-      #define WIFI_PASSWORD SECRET_WIFI_PASSWORD
-
-      //***************mqtt stuff
-      #include <AsyncMqttClient.h>
-      AsyncMqttClient mqttClient;  // Create a MQTT client Object
-      #define MQTT_HOST SECRET_MQTT_HOST 
-      #define MQTT_PORT SECRET_MQTT_PORT 
-      #define MQTT_USER_NAME  SECRET_MQTT_USER_NAME 
-      #define MQTT_USER_PWD SECRET_MQTT_USER_PWD  
-
-      #ifdef CASA_1
-        //garage topics
-        #define BUTTON_TOPIC          "garage/button"
-        #define TEMPERATURE_TOPIC     "garage/temperature"
-        #define HUMIDITY_TOPIC        "garage/humidity"
-        #define PRESSURE_TOPIC        "garage/pressure"
-        #define DOOR_TOPIC            "garage/door"
-        #define DOOR_COUNT_TOPIC      "garage/doorcount"
-        #define PIR_TOPIC             "garage/pir"
-        #define LUX_TOPIC             "garage/lux"
-        #define AH2O_TOPIC            "garage/ah2o"
-        #define DH2O_TOPIC            "garage/dh2o"
-        #define SONIC_TOPIC           "garage/sonic"
-        #define SEND_FAILURES_TOPIC   "garage/sendfailures"
-        #define HATCH_TOPIC           "garage/hatch"
-  
-        //hub topics
-        #define HUB_TEMPERATURE_TOPIC "hub/temperature"
-        #define HUB_HUMIDITY_TOPIC    "hub/humidity"
-        #define HUB_PRESSURE_TOPIC    "hub/pressure"
-  
-        //kitchen topics
-        #define KITCHEN_TEMPERATURE_TOPIC     "kitchen/temperature"
-        #define KITCHEN_HUMIDITY_TOPIC        "kitchen/humidity"
-        #define KITCHEN_PRESSURE_TOPIC        "kitchen/pressure"
-        #define KITCHEN_PIR_TOPIC             "kitchen/pir"
-  
-        //bathroom topics
-        #define BATHROOM_TEMPERATURE_TOPIC     "bathroom/temperature"
-        #define BATHROOM_HUMIDITY_TOPIC        "bathroom/humidity"
-        #define BATHROOM_PRESSURE_TOPIC        "bathroom/pressure"
-        #define BATHROOM_PIR_TOPIC             "bathroom/pir"      
-  
-        //bathroom2 topics
-        #define BATHROOM2_TEMPERATURE_TOPIC     "bathroom2/temperature"
-        #define BATHROOM2_HUMIDITY_TOPIC        "bathroom2/humidity"
-        #define BATHROOM2_PRESSURE_TOPIC        "bathroom2/pressure"
-        #define BATHROOM2_PIR_TOPIC             "bathroom2/pir"      
-      #endif //CASA_1
-      
-      #ifdef CASA_2
-        //hub topics
-        #define HUB_TEMPERATURE_TOPIC "2hub/temperature"
-        #define HUB_HUMIDITY_TOPIC    "2hub/humidity"
-       //#define HUB_PRESSURE_TOPIC    "2hub/pressure"
-        #define HUB_SEND_FAILURES_TOPIC "2hub/sendfailures"
-             
-       //basement topics
-       // #define BUTTON_TOPIC          "2basement/button"
-        #define BASEMENT_TEMPERATURE_TOPIC     "2basement/temperature"
-        #define BASEMENT_HUMIDITY_TOPIC        "2basement/humidity"
-        //#define PRESSURE_TOPIC        "2basement/pressure"
-        //#define DOOR_TOPIC            "2basement/door"
-        //#define DOOR_COUNT_TOPIC      "2basement/doorcount"
-        #define BASEMENT_PIR_TOPIC             "2basement/pir"
-        #define BASEMENT_PIR_COUNT_TOPIC        "2basement/pircount"
-        #define BASEMENT_LUX_TOPIC             "2basement/lux"
-        #define BASEMENT_AH2O_TOPIC            "2basement/ah2o"
-        #define BASEMENT_DH2O_TOPIC            "2basement/dh2o"
-       // #define SONIC_TOPIC           "2basement/sonic"
-        #define BASEMENT_SEND_FAILURES_TOPIC   "2basement/sendfailures"
-        //#define HATCH_TOPIC           "2basement/hatch"
-  
-        //kitchen topics
-        #define KITCHEN_TEMPERATURE_TOPIC     "2kitchen/temperature"
-        #define KITCHEN_HUMIDITY_TOPIC        "2kitchen/humidity"
-        #define KITCHEN_PRESSURE_TOPIC        "2kitchen/pressure"
-        #define KITCHEN_PIR_TOPIC             "2kitchen/pir"
-        #define KITCHEN_PIR_COUNT_TOPIC        "2kitchen/pircount"
-        #define KITCHEN_LUX_TOPIC             "2kitchen/lux"
-        #define KITCHEN_DOOR_TOPIC            "2kitchen/door"
-        #define KITCHEN_DOOR_COUNT_TOPIC       "2kitchen/doorcount"
-        #define KITCHEN_SEND_FAILURES_TOPIC   "2kitchen/sendfailures"
-         
-        //bathroom topics
-        #define BATHROOM_TEMPERATURE_TOPIC     "2bathroom/temperature"
-        #define BATHROOM_HUMIDITY_TOPIC        "2bathroom/humidity"
-        #define BATHROOM_LUX_TOPIC             "2bathroom/lux"
-        #define BATHROOM_SEND_FAILURES_TOPIC    "2bathroom/sendfailures"
-        //#define BATHROOM_PIR_TOPIC             "2bathroom/pir"      
-  
-        //bedroom topics
-        #define BEDROOM_TEMPERATURE_TOPIC     "2bedroom/temperature"
-        #define BEDROOM_HUMIDITY_TOPIC        "2bedroom/humidity"
-        //#define BEDROOM_LUX_TOPIC             "2bedroom/lux"
-        #define BEDROOM_DOOR_TOPIC            "2bedroom/door"
-        #define BEDROOM_DOOR_COUNT_TOPIC       "2bedroom/doorcount"
-        #define BEDROOM_SEND_FAILURES_TOPIC   "2bedroom/sendfailures"
-
-      #endif //CASA_2
-    #endif
+//*****************************************************************************************
 
   //*****************
-  // 5. Select one hardware device below and comment out the others: **/
+  // 3. Select one hardware device below and comment out the others: **/
   // Board selection impacts pin assignments, setup of pin modes, 
   // pwr on & off pulse duration, and onboard LED on/off states*/
   //*****************
   
-  //#define BOTLETICS  //Use for everything except Lillygo, even if no cellular modem exists
+  //#define BOTLETICS  //Use for SIM7000A boards including Botletics shield connected to ME LIFE ESP32 or equivalent
   #define LILLYGO  //Use for Lillygo TT Go SIM7000G board with on-board wrover ESP32 
   
   //*****************
-  // 6. Select one temperature sensor if there is an onboard sensor:
+  // 4. Select one temperature sensor if there is an onboard sensor:
   //****************
   #define AHT10_    // Adafruit AHT10  <--GARAGE
 //#define BME_        // BME280 temperature, humidity, pressure sensor
@@ -325,7 +188,7 @@ const char* VERSION = "2023 v0619";
   //#define SHT20_    // DFRobot SHT20
   
   //*****************    
-  // 7. Sensor Inventory
+  // 5. Sensor Inventory
   //*****************
   uint8_t sensorID = 0;               //HUB identifier = 0 see next comment  
   // arrays to indicate types of sensors aboard each sensor platform (1=presnt, 0 = absent)
@@ -338,6 +201,7 @@ const char* VERSION = "2023 v0619";
     uint8_t temps[] = {1,1,0,0, 1,1,1,0}, hums[]=  {1,1,0,0, 1,1,1,0}, dbms[]= {1,0,0,0, 0,0,0,0}, pres[]={1,0,0,0, 0,1,0,0}, bat[]=   {0,0,0,0, 0,0,0,0};
     uint8_t luxs[] =  {0,1,0,0, 1,0,0,0}, h2os[] = {0,0,0,0, 0,0,0,0}, doors[]={0,1,0,0, 1,0,0,0}, pirs[]={0,1,0,0, 1,1,1,0}, sonics[]={0,0,1,0, 0,0,0,0};
   #endif
+  
   #ifdef CASA_2
     #define numberOfPlatforms 5         // number of sensor platforms available  + 1 for HUB
                                         // example: if hub has sensors, and there are 3 wireless platforms, numberOfPlatforms = 4
@@ -347,7 +211,7 @@ const char* VERSION = "2023 v0619";
   #endif
   
   //*****************
-  // 8. sensor data structure
+  // 6. sensor data structure
   //*****************
    typedef struct platforms {  // create a definition of platformm sensors
       uint8_t id;              // id must be unique for each sender; HUB  id=0; sensor platforms are 1,2,3
@@ -432,7 +296,7 @@ const char* VERSION = "2023 v0619";
   #endif  
 
   //*****************
-  // Miscellaneous
+  // 7. Miscellaneous
   //*****************
 
   uint64_t uS_TO_S_FACTOR = 1000000;  // Conversion factor for micro seconds to seconds  
@@ -445,13 +309,14 @@ const char* VERSION = "2023 v0619";
   char URL[255];                      // buffer for request URL
   char body[255];                     // buffer for POST 
   uint8_t wakeupID;                   //reason sensor wode up; see readWakeupID 
+  bool reportFlag = true;             //????
 
   #define OPEN 1
   #define PRESENT 1
   #define MOTION 1
 
   //*****************
-  // Timer stuff
+  // 8. Timer stuff
   //*****************
   
   extern "C" {
@@ -459,15 +324,10 @@ const char* VERSION = "2023 v0619";
     #include "freertos/timers.h" 
   }
   unsigned long currentMillis =0;
-  unsigned long priorMillis=0;
-
-  #ifdef HA
-    TimerHandle_t mqttReconnectTimer; //Create two Timer Objects
-    TimerHandle_t wifiReconnectTimer;
-  #endif  
+  unsigned long priorMillis=0; 
   
   //*****************
-  //    ESP32 PIN DEFINITIONS
+  // 9.  ESP32 PIN DEFINITIONS
   //    note: esp32 set pin 15 low prevents startup log on Serial monitor - 
   //          good to know for battery operation
   //    From youtube #363 - ESP Pri 1 pins - The guy with the swiss accent:
@@ -488,8 +348,6 @@ const char* VERSION = "2023 v0619";
     #define pinFONA_TX 16               // ESP32 hardware serial RX2 to shield 10 TX
     #define pinFONA_RX 17               // ESP32 hardware serial TX2 to shield 11 RX
     #define pinFONA_PWRKEY 18           // BOTLETICS shield 6
-    #define pinSDA 21                   // ESP 12C Bus SDA for BME temp sensor, OLED, etc
-    #define pinSCL 22                   // ESP 12C Bus SCL for BME temp sensor, OLED, etc
   #endif
 
   //*****************
@@ -510,9 +368,11 @@ const char* VERSION = "2023 v0619";
   #endif
 
   //*****************
-  // Pin connections used for sensors
+  // 10. Pin connections used for sensors
   //*****************
   
+  #define pinSDA 21                   // ESP 12C Bus SDA for temp sensor, OLED, etc
+  #define pinSCL 22                   // ESP 12C Bus SCL for temp sensor, OLED, etc
   #define pinGarage 19                // garage door relay controller                             
   #define pinAh2o 32                  // analog flood sensor touchpin
   #define pinPhotoCell 34             // esp32 analog input; photocell pulled high, 
@@ -526,11 +386,11 @@ const char* VERSION = "2023 v0619";
                                       //  pinDoor = 1 = closed, 0 = open.
                                       //NOTE if this pin is changed, 
                                       //  change setupWakeupConditions as well.
-  #define pinSonicTrigger 23
+  #define pinSonicTrigger 23          // useful to deteermine whether car is in garage
   #define pinSonicEcho 33
   
   //*****************
-  // Temperature Sensor Libraries
+  // 11. Temperature Sensor Libraries
   //*****************
 
   #include <Wire.h>                 // 12C
@@ -559,7 +419,7 @@ const char* VERSION = "2023 v0619";
   #endif     
   
   //*****************
-  // OLED Libraries
+  // 12. OLED Libraries
   //*****************
   #ifdef OLED_
     //#define FORMAT1  //HUB only format with temp hum pres dbm sensors
@@ -571,11 +431,13 @@ const char* VERSION = "2023 v0619";
   #endif   
 
   //*****************
-  // WIFI Libraries
+  // 13. HTTP GET Libraries
   //*****************
   
-  #ifdef WIFI
-    #include <WiFi.h>
+  #ifdef HTTPGET
+    #ifndef WIFI_H
+      #include <WiFi.h>
+    #endif
     #include <HTTPClient.h>
     const char* wifiSSID[] = {"n/a","AMBIENT_1","AMBIENT_2","AMBIENT_3"};
     const char* wifiPassword[] = {"","","",""};
@@ -592,32 +454,30 @@ const char* VERSION = "2023 v0619";
   #endif  
   
   //*****************
-  // FONA Library
+  // 14. FONA Library
   //*****************
 
-  #include "Adafruit_FONA.h"  //IMPORTANT! get it from https://github.com/botletics/SIM7000-LTE-Shield/tree/master/Code
-  //#include <Adafruit_FONA.h>
+  //#include "Adafruit_FONA.h"  //IMPORTANT! get it from https://github.com/botletics/SIM7000-LTE-Shield/tree/master/Code
+  #include <Adafruit_FONA.h>
   Adafruit_FONA_LTE fona = Adafruit_FONA_LTE();
   #include <HardwareSerial.h>
   HardwareSerial fonaSS(1);
   #define SIMCOM_7000                // SIM7000A/C/E/G
 
   //*****************
-  // ESPNow Libraries
+  // 15. ESPNow Libraries
   //*****************
   
   #ifdef ESPNOW
     #include <esp_now.h>
-    #include <WiFi.h>               //espNow uses its own wifi; no external wifi router is used
+    #ifndef WIFI_H
+      #include <WiFi.h>        //espNow uses its own wifi; no external wifi router is used
+    #endif    
+    //espNow uses its own wifi; no external wifi router is used
     #include <esp_wifi.h>
     
     #ifdef ESPNOW_1to1
-      esp_now_peer_info_t peerInfo;   // Create peer interface if sending
-      //uint8_t broadcastAddress[] = {0xAC, 0x67, 0xB2, 0x2B, 0x6D, 0x00};  //example for esp32 #7 MAC Address AC:67:B2:2B:6D:00
-      //uint8_t broadcastAddress[] = {0x8C, 0xAA, 0xB5, 0x85, 0x6A, 0x68};  //esp32 #12 Mac Address 8C:AA:B5:85:6A:68
-      uint8_t broadcastAddress[] = {0xA8, 0x03, 0x2A, 0x74, 0xBE, 0x8C};  //LILLYGO MAC Address A8:03:2A:74:BE:8C
-      //uint8_t broadcastAddress[] = {0x40, 0x91, 0x51, 0x30, 0x62, 0x94};   // lillygo2: 40:91:51:30:62:94
-     
+      esp_now_peer_info_t peerInfo;   // Create peer interface if sending     
       int espNowAttempts=0;            //number of ESPNOW transmission attempts so far (do not adjust)
       #define espNowAttemptsAllowed 30  //number of unsuccessful attempts allowed before sleeping if sleepSeconds > 0
       int espNowDelay = 50;         //delay in msec between espnow attempts
@@ -625,7 +485,7 @@ const char* VERSION = "2023 v0619";
   #endif
 
   //*****************
-  //  MQTT PARAMETERS
+  // 16. MQTT PARAMETERS
   //*****************
 
   #ifdef adaMQTT
@@ -634,20 +494,146 @@ const char* VERSION = "2023 v0619";
 
     #define adaMQTT_SERVER      "io.adafruit.com"    
     #define adaMQTT_PORT        1883    //insecure port
-    #define adaMQTT_USERNAME SECRET_adaMQTT_USERNAME
-    #define adaMQTT_KEY SECRET_adaMQTT_KEY
     //IMPORTANT - See Secrets file setup instructions above for mqtt credential options                  
   
     // Setup the FONA MQTT class by passing in the FONA class and MQTT server and login details.
-    Adafruit_MQTT_FONA mqtt(&fona, adaMQTT_SERVER, adaMQTT_PORT, adaMQTT_USERNAME, adaMQTT_KEY);
-    Adafruit_MQTT_Publish feed_temp = Adafruit_MQTT_Publish(&mqtt, adaMQTT_USERNAME "/f/t");  
-    Adafruit_MQTT_Publish feed_hum = Adafruit_MQTT_Publish(&mqtt, adaMQTT_USERNAME "/f/h");
-    Adafruit_MQTT_Publish feed_csv = Adafruit_MQTT_Publish(&mqtt, adaMQTT_USERNAME "/f/csv"); 
-    Adafruit_MQTT_Publish feed_cmd = Adafruit_MQTT_Publish(&mqtt, adaMQTT_USERNAME "/f/cmd");  
-    Adafruit_MQTT_Subscribe feed_command = Adafruit_MQTT_Subscribe(&mqtt, adaMQTT_USERNAME "/feeds/command");
+    Adafruit_MQTT_FONA mqtt(&fona, adaMQTT_SERVER, adaMQTT_PORT, SECRET_adaMQTT_USERNAME, SECRET_adaMQTT_KEY);
+    Adafruit_MQTT_Publish feed_temp = Adafruit_MQTT_Publish(&mqtt, SECRET_adaMQTT_USERNAME "/f/t");  
+    Adafruit_MQTT_Publish feed_hum = Adafruit_MQTT_Publish(&mqtt, SECRET_adaMQTT_USERNAME "/f/h");
+    Adafruit_MQTT_Publish feed_csv = Adafruit_MQTT_Publish(&mqtt, SECRET_adaMQTT_USERNAME "/f/csv"); 
+    Adafruit_MQTT_Publish feed_cmd = Adafruit_MQTT_Publish(&mqtt, SECRET_adaMQTT_USERNAME "/f/cmd");  
+    Adafruit_MQTT_Subscribe feed_command = Adafruit_MQTT_Subscribe(&mqtt, SECRET_adaMQTT_USERNAME "/feeds/command");
 
    // Adafruit_MQTT_Publish feed_gar = Adafruit_MQTT_Publish(&mqtt, SECRET_adaMQTT_USERNAME "/f/gar"); 
+  #endif
+
+  //*******************************   
+  // 17. Telegram setup
+  //*******************************
+    #ifdef TELEGRAM
+      #ifndef WIFI_H
+        #include <WiFi.h>        
+      #endif    
+      #include <WiFiClientSecure.h>
+      #include <UniversalTelegramBot.h> // Universal Telegram Bot Library written by Brian Lough: https://github.com/witnessmenow/Universal-Arduino-Telegram-Bot
+      #include <ArduinoJson.h>
+      WiFiClientSecure client;
+      UniversalTelegramBot bot(SECRET_BOTTOKEN, client);
+      //Checks for new messages every 1 second.
+      int botRequestDelay = 1000;
+      unsigned long lastTimeBotRan;      
+    #endif
     
+  //*******************************   
+  // 18. Home Assistant setup
+  //*******************************
+  #ifdef HA 
+    TimerHandle_t mqttReconnectTimer; //Create two Timer Objects
+    TimerHandle_t wifiReconnectTimer;
+    #define mqTTMode
+    //****************wifi stuff
+    #ifndef WIFI_H
+      #include <WiFi.h>        
+    #endif    
+    #include "WiFiMulti.h"
+    #include <HTTPClient.h>   
+    //#define WIFI_SSID SECRET_WIFI_SSID
+    //#define WIFI_PASSWORD SECRET_WIFI_PASSWORD
+
+    //***************mqtt stuff
+    #include <AsyncMqttClient.h>
+    AsyncMqttClient mqttClient;  // Create a MQTT client Object
+    
+    #ifdef CASA_1
+      //garage topics
+      #define BUTTON_TOPIC          "garage/button"
+      #define TEMPERATURE_TOPIC     "garage/temperature"
+      #define HUMIDITY_TOPIC        "garage/humidity"
+      #define PRESSURE_TOPIC        "garage/pressure"
+      #define DOOR_TOPIC            "garage/door"
+      #define DOOR_COUNT_TOPIC      "garage/doorcount"
+      #define PIR_TOPIC             "garage/pir"
+      #define LUX_TOPIC             "garage/lux"
+      #define AH2O_TOPIC            "garage/ah2o"
+      #define DH2O_TOPIC            "garage/dh2o"
+      #define SONIC_TOPIC           "garage/sonic"
+      #define SEND_FAILURES_TOPIC   "garage/sendfailures"
+      #define HATCH_TOPIC           "garage/hatch"
+
+      //hub topics
+      #define HUB_TEMPERATURE_TOPIC "hub/temperature"
+      #define HUB_HUMIDITY_TOPIC    "hub/humidity"
+      #define HUB_PRESSURE_TOPIC    "hub/pressure"
+
+      //kitchen topics
+      #define KITCHEN_TEMPERATURE_TOPIC     "kitchen/temperature"
+      #define KITCHEN_HUMIDITY_TOPIC        "kitchen/humidity"
+      #define KITCHEN_PRESSURE_TOPIC        "kitchen/pressure"
+      #define KITCHEN_PIR_TOPIC             "kitchen/pir"
+
+      //bathroom topics
+      #define BATHROOM_TEMPERATURE_TOPIC     "bathroom/temperature"
+      #define BATHROOM_HUMIDITY_TOPIC        "bathroom/humidity"
+      #define BATHROOM_PRESSURE_TOPIC        "bathroom/pressure"
+      #define BATHROOM_PIR_TOPIC             "bathroom/pir"      
+
+      //bathroom2 topics
+      #define BATHROOM2_TEMPERATURE_TOPIC     "bathroom2/temperature"
+      #define BATHROOM2_HUMIDITY_TOPIC        "bathroom2/humidity"
+      #define BATHROOM2_PRESSURE_TOPIC        "bathroom2/pressure"
+      #define BATHROOM2_PIR_TOPIC             "bathroom2/pir"      
+    #endif //CASA_1
+    
+    #ifdef CASA_2
+      //hub topics
+      #define HUB_TEMPERATURE_TOPIC "2hub/temperature"
+      #define HUB_HUMIDITY_TOPIC    "2hub/humidity"
+     //#define HUB_PRESSURE_TOPIC    "2hub/pressure"
+      #define HUB_SEND_FAILURES_TOPIC "2hub/sendfailures"
+           
+     //basement topics
+     // #define BUTTON_TOPIC          "2basement/button"
+      #define BASEMENT_TEMPERATURE_TOPIC     "2basement/temperature"
+      #define BASEMENT_HUMIDITY_TOPIC        "2basement/humidity"
+      //#define PRESSURE_TOPIC        "2basement/pressure"
+      //#define DOOR_TOPIC            "2basement/door"
+      //#define DOOR_COUNT_TOPIC      "2basement/doorcount"
+      #define BASEMENT_PIR_TOPIC             "2basement/pir"
+      #define BASEMENT_PIR_COUNT_TOPIC        "2basement/pircount"
+      #define BASEMENT_LUX_TOPIC             "2basement/lux"
+      #define BASEMENT_AH2O_TOPIC            "2basement/ah2o"
+      #define BASEMENT_DH2O_TOPIC            "2basement/dh2o"
+     // #define SONIC_TOPIC           "2basement/sonic"
+      #define BASEMENT_SEND_FAILURES_TOPIC   "2basement/sendfailures"
+      //#define HATCH_TOPIC           "2basement/hatch"
+
+      //kitchen topics
+      #define KITCHEN_TEMPERATURE_TOPIC     "2kitchen/temperature"
+      #define KITCHEN_HUMIDITY_TOPIC        "2kitchen/humidity"
+      #define KITCHEN_PRESSURE_TOPIC        "2kitchen/pressure"
+      #define KITCHEN_PIR_TOPIC             "2kitchen/pir"
+      #define KITCHEN_PIR_COUNT_TOPIC        "2kitchen/pircount"
+      #define KITCHEN_LUX_TOPIC             "2kitchen/lux"
+      #define KITCHEN_DOOR_TOPIC            "2kitchen/door"
+      #define KITCHEN_DOOR_COUNT_TOPIC       "2kitchen/doorcount"
+      #define KITCHEN_SEND_FAILURES_TOPIC   "2kitchen/sendfailures"
+       
+      //bathroom topics
+      #define BATHROOM_TEMPERATURE_TOPIC     "2bathroom/temperature"
+      #define BATHROOM_HUMIDITY_TOPIC        "2bathroom/humidity"
+      #define BATHROOM_LUX_TOPIC             "2bathroom/lux"
+      #define BATHROOM_SEND_FAILURES_TOPIC    "2bathroom/sendfailures"
+      //#define BATHROOM_PIR_TOPIC             "2bathroom/pir"      
+
+      //bedroom topics
+      #define BEDROOM_TEMPERATURE_TOPIC     "2bedroom/temperature"
+      #define BEDROOM_HUMIDITY_TOPIC        "2bedroom/humidity"
+      //#define BEDROOM_LUX_TOPIC             "2bedroom/lux"
+      #define BEDROOM_DOOR_TOPIC            "2bedroom/door"
+      #define BEDROOM_DOOR_COUNT_TOPIC       "2bedroom/doorcount"
+      #define BEDROOM_SEND_FAILURES_TOPIC   "2bedroom/sendfailures"
+
+    #endif //CASA_2
   #endif
 
   /************************************
@@ -801,40 +787,23 @@ int connectToCellularNetwork() {
   #ifdef printMode
     Serial.println(F("*connectToCellularNetwork*"));
   #endif
-  #ifndef ATMode
-    int i=0;
-    while (!readNetStatus()) {
-      Serial.print(F("."));
-      delay(2000); // Retry every 2s
-      i++;
-      if (i==5){
-        #ifdef printMode
-            Serial.println(F("Failed"));
-        #endif    
-        return -1;
-      }
+  int i=0;
+  while (!readNetStatus()) {
+    Serial.print(F("."));
+    delay(2000); // Retry every 2s
+    i++;
+    if (i==5){
+      #ifdef printMode
+          Serial.println(F("Failed"));
+      #endif    
+      return -1;
     }
-    #ifdef printMode
-      Serial.println(F("Connected to cell network!"));
-    #endif
-    return 0;
-    
-  #else
-  
-    int err=sendATCmd("AT+CGREG?","","");
-    #ifdef printMode 
-      if (err==0){              
-        Serial.println(F("Connected!"));
-      }else{
-        Serial.println(F("Failed!"));
-      }    
-    #endif
-    if (err==0){
-      return 0;
-    }
-    return -1; 
-  
+  }
+  #ifdef printMode
+    Serial.println(F("Connected to cell network!"));
   #endif
+  return 0;
+    
 }
 //*************************
 void displayPlatforms(){  
@@ -916,7 +885,8 @@ void displayStatus(uint8_t i){
             
         if (pirs[i]==1){//oled.println("M");
           oled.print(F(" m")); 
-          oled.print(platform[i].pir);  
+          //oled.print(platform[i].pir);  
+          oled.print(platform[i].pirCount);
         }
 
         if (sonics[i]==1){
@@ -1009,12 +979,12 @@ void espNowOnDataRecv(const uint8_t * mac_addr, const uint8_t *incomingData, int
       platform[sensorData.id].pir = sensorData.pir;
       platform[sensorData.id].sonic = sensorData.sonic;
       platform[sensorData.id].sendFailures = sensorData.sendFailures;
-      platform[sensorData.id].pirCount = platform[sensorData.id].pirCount  + sensorData.pir;
+      platform[sensorData.id].pirCount = platform[sensorData.id].pirCount  + sensorData.pirCount;
 
       publishMQTT(); 
    
       #ifdef printMode    
-        Serial.println(F("id      temp    hum    pres    lux    aH2o    dH2o    door   doorCount  sonic   pir  Fails  pirCount"));
+        Serial.println(F("id      temp    hum    pres    lux    aH2o    dH2o    door   doorCount  sonic   PIR  PIR#  Fails"));
         Serial.print(sensorData.id);Serial.print("\t");
         Serial.print(sensorData.temperature);Serial.print("\t");
         Serial.print(sensorData.humidity);Serial.print("\t");
@@ -1026,8 +996,8 @@ void espNowOnDataRecv(const uint8_t * mac_addr, const uint8_t *incomingData, int
         Serial.print(sensorData.doorCount);Serial.print("\t"); 
         Serial.print(sensorData.sonic);Serial.print("\t"); 
         Serial.print(sensorData.pir);Serial.print("\t");
-        Serial.print(sensorData.sendFailures); Serial.print("\t");
-        Serial.println(sensorData.pirCount);Serial.print("");
+        Serial.print(sensorData.pirCount);Serial.print("\t");
+        Serial.println(sensorData.sendFailures);
       #endif 
       
       printSensorData();
@@ -1254,7 +1224,7 @@ String httpGETRequest(const char* serverName) {
   #ifdef printMode 
     Serial.println(F("*httpGETRequest*"));Serial.println(serverName);
   #endif  
-  #ifdef WIFI  
+  #ifdef HTTPGET  
     HTTPClient http;
       
     // Your IP address with path or Domain name with URL path 
@@ -1549,50 +1519,17 @@ ifttt_:  //Ifttt processing
     #ifdef printMode
       Serial.print(F("body: ")); Serial.println(body);
     #endif 
-    
-    #ifndef ATMode  
-      i=0;
-      while (i < postTries && !fona.postData("POST",SECRET_IFTTT_HB_URL,body)) {
-        #ifdef printMode 
-          Serial.println(F("."));
-        #endif
-        delay(5000);
-        i++;
-      }
-      if(i<postTries){
-        retn=0;
-      }
-      
-    #else  //ATMode
-      i=0;
-      do {
-        err = sendATCmd("AT+HTTPTERM","","");
-        err = sendATCmd("AT+HTTPINIT","","");
-        err = sendATCmd("AT+HTTPPARA","=CID","1");
-        sprintf(URL, "%s?value1=%s",SECRET_IFTTT_HB_URL,buf);
-        delay(200);
-        Serial.print("URL: ");Serial.println(URL);
-        err = sendATCmd("AT+HTTPPARA","=URL",URL);
-        delay(2000);
-        err = sendATCmd("AT+HTTPACTION","=0","");
-        sendATCmd("AT+HTTPTERM","",""); 
-        i++;
-        if(err==0){
-          Serial.print(F("ifttt attempts = "));Serial.println(i);
-          retn = 0;
-        }else{
-          #ifdef printMode
-            Serial.print(F("."));
-            delay(5000);
-          #endif
-        }  
-      } while (i < postTries && err != 0);
-      if(i<postTries){
-        retn=0;
-      }
-      err = sendATCmd("AT+HTTPTERM","",""); 
-    #endif  //ATMode
- 
+    i=0;
+    while (i < postTries && !fona.postData("POST",SECRET_IFTTT_HB_URL,body)) {
+      #ifdef printMode 
+        Serial.println(F("."));
+      #endif
+      delay(5000);
+      i++;
+    }
+    if(i<postTries){
+      retn=0;
+    }
   #endif   //IFTTTMode
 
   //exit if successfully posted unless we are in setup mode and estCellular is defined
@@ -1617,55 +1554,29 @@ dweet_:  //dweet processing
     // GET request use the IMEI as device ID
     snprintf(URL, sizeof(URL),"http://dweet.io/dweet/for/%s?%s",imei,buf);
 
-    #ifndef ATMode  
-      #ifdef printMode
-        Serial.println(F("fona.HTTP_GET_start"));
-        Serial.print(F("URL: ")); Serial.println(URL);
-      #endif
-      uint16_t statusCode;
-      int16_t length;
-      i = 0;               // Count the number of attempts 
-      while (i < postTries && !fona.HTTP_GET_start(URL,&statusCode, (uint16_t *)&length)) {
-        #ifdef printMode
-          Serial.print(F("."));
-        #endif
-        Serial.print(F("Dweet failure #")); Serial.println(i);
-        delay(5000);
-        i++; 
-      }
-      if (i<postTries){
-        retn=0;
-      }
-      #ifdef printMode
-        Serial.print("statusCode, length: ");Serial.print (statusCode);Serial.print(", ");Serial.println(length);
-      #endif
-      fona.HTTP_GET_end();  //causes verbose response AT+HTTPREAD (and? AT+HTTPTERM to terminate HTTP?)
-    #else
-      i=0;
-      do {
-        err = sendATCmd("AT+HTTPTERM","","");
-        err = sendATCmd("AT+HTTPINIT","","");
-        err = sendATCmd("AT+HTTPPARA","=CID","1");
-        delay(200);
-        Serial.print("URL: ");Serial.println(URL);
-        err = sendATCmd("AT+HTTPPARA","=URL",URL);
-        delay(2000);
-        err = sendATCmd("AT+HTTPACTION","=0","");
-        sendATCmd("AT+HTTPTERM","",""); 
-        i++;
-        if(err==0){
-          Serial.print(F("dweet attempts = "));Serial.println(i);
-          return 0;  //????
-        }else{
-          #ifdef printMode
-            Serial.print(F("."));
-            delay(5000);
-          #endif
-        }  
-      } while (i < postTries && err != 0);
-      err = sendATCmd("AT+HTTPTERM","",""); 
+    #ifdef printMode
+      Serial.println(F("fona.HTTP_GET_start"));
+      Serial.print(F("URL: ")); Serial.println(URL);
     #endif
-
+    uint16_t statusCode;
+    int16_t length;
+    i = 0;               // Count the number of attempts 
+    while (i < postTries && !fona.HTTP_GET_start(URL,&statusCode, (uint16_t *)&length)) {
+      #ifdef printMode
+        Serial.print(F("."));
+      #endif
+      Serial.print(F("Dweet failure #")); Serial.println(i);
+      delay(5000);
+      i++; 
+    }
+    if (i<postTries){
+      retn=0;
+    }
+    #ifdef printMode
+      Serial.print("statusCode, length: ");Serial.print (statusCode);Serial.print(", ");Serial.println(length);
+    #endif
+    fona.HTTP_GET_end();  //causes verbose response AT+HTTPREAD (and? AT+HTTPTERM to terminate HTTP?)
+    
     if(i<postTries){ 
     for(uint8_t j=0;j<numberOfPlatforms;j++){
      // platform[j].door =  0;
@@ -1684,20 +1595,17 @@ dweet_:  //dweet processing
 void postSensorHeartbeatData(){
   #ifdef cellularMode
     if (heartbeatTimeIsUp(heartbeatMinutes*60000L) ==1 ){
-
-        sendEspNow_1to1();          //format data and send espnow msg to a single peer if #define ESPNOW_1to1 is enabled; 
-                                                         
-
-        activateCellular();
-        readSignalStrength(0);
-        postSensorData();          
-        displayStatus(sensorID);      // update OLED display here to update signal strength
-        simModuleOffIfSimSleepMode(); // Power off the SIM7000 module by goosing the PWR pin if simSleepMode
-        #ifdef alertMode
-          for (uint8_t i=0; i<numberOfPlatforms; i++){    //reset for next heartbeat cycle 
-            sensorStatus[i]=0; 
-          }
-        #endif
+      sendEspNow_1to1();          //format data and send espnow msg to a single peer if #define ESPNOW_1to1 is enabled;                                                         
+      activateCellular();
+      readSignalStrength(0);
+      postSensorData();          
+      displayStatus(sensorID);      // update OLED display here to update signal strength
+      simModuleOffIfSimSleepMode(); // Power off the SIM7000 module by goosing the PWR pin if simSleepMode
+      #ifdef alertMode
+        for (uint8_t i=0; i<numberOfPlatforms; i++){    //reset for next heartbeat cycle 
+          sensorStatus[i]=0; 
+        }
+      #endif
     } 
   #endif 
 }
@@ -2020,10 +1928,10 @@ void  processSensorPlatforms(){
   for (uint8_t i=0; i< numberOfPlatforms; i++){  // for each sensor:
     alert[i]=0;                   //clear alert
     if (platformStatus[i]==0){    // if sensor has not been sampled yet:    
-      #ifdef WIFI                 // if we are using http GET via wifi connection with sensor platforms:
+      #ifdef HTTPGET              // if we are using http GET via wifi connection with sensor platforms:
                                   // NOTE if using espNOW the data will be pushed to HUB; no need for further setup
         killWifi();               // prepare to connect via wifi with server
-        if(setupWifi(i)==0){      // connect to local ESP32(i) wifi server if not local
+        if(setupWifiGET(i)==0){   // connect to local ESP32(i) wifi server if not local
       #endif
           platformStatus[i]= readSensorData(i); // need if no sleep time      
           if(platformStatus[i]==1){ //determine if sensor data has been updated
@@ -2033,7 +1941,7 @@ void  processSensorPlatforms(){
             #endif  
             alert[i]= processAlerts(i);    // compare sensors to threshholds and set alert status        
           }  
-          #ifdef WIFI  
+          #ifdef HTTPGET  
             killWifi();
         }
           #endif
@@ -2263,7 +2171,7 @@ uint8_t readSensorData(uint8_t i){             // temp & voltage
     }
       
   }else if (sensors[i]=="wifi"){ // read remote sensors
-    #ifdef WIFI
+    #ifdef HTTPGET
       // Check WiFi connection status
       #ifdef printMode
           Serial.print(F("WL_CONNECTED = "));Serial.println(WL_CONNECTED);
@@ -2271,7 +2179,7 @@ uint8_t readSensorData(uint8_t i){             // temp & voltage
       #endif
   
       if(WiFi.status()!=WL_CONNECTED ){ 
-        setupWifi(i);
+        setupWifii(i);
       }
       if(WiFi.status()== WL_CONNECTED ){ 
         String payload = "--"; 
@@ -2593,7 +2501,7 @@ void sendEspNow_1to1(){
     dataOut.doorCount = platform[1].doorCount;
     dataOut.pir = platform[1].pir+platform[0].pir;
     
-    esp_err_t espResult = esp_now_send(broadcastAddress, (uint8_t *) &dataOut, sizeof(dataOut)); // Send message via ESP-NOW
+    esp_err_t espResult = esp_now_send(SECRET_broadcastAddress, (uint8_t *) &dataOut, sizeof(dataOut)); // Send message via ESP-NOW
     #ifdef printMode
       if (espResult == ESP_OK) { 
         Serial.println(F(" Sent with success"));
@@ -2672,7 +2580,7 @@ void setupEspNow(){
       esp_now_register_send_cb(ESPNOW_1to1_OnDataSent);
       
       // Register peer
-      memcpy(peerInfo.peer_addr, broadcastAddress, 6);
+      memcpy(peerInfo.peer_addr, SECRET_broadcastAddress, 6);
       peerInfo.channel = 0;  
       peerInfo.encrypt = false;
       
@@ -2876,12 +2784,12 @@ void setupWakeupConditions(){
   }  
 }      
 
-/***********************************
-int setupWifi(uint8_t i){
-  #ifdef WIFI  
+//***********************************
+int setupWifiGET(uint8_t i){
+  #ifdef HTTPGET  
     if (sensors[i]=="local"){return 0;}
     #ifdef printMode 
-      Serial.print(F("*setupWiFi("));Serial.print(i);Serial.println(F(") *")); 
+      Serial.print(F("*setupWiFiGET("));Serial.print(i);Serial.println(F(") *")); 
       Serial.print("wifiSSID[i]: ");Serial.print(wifiSSID[i]);
       Serial.print(F("  wifiPassword[i]: "));Serial.println(wifiPassword[i]);
     #endif
@@ -2910,7 +2818,7 @@ int setupWifi(uint8_t i){
     }
   #endif
 }
-*/
+
 //*********************************
 void simModuleOffIfSimSleepMode(){    // Power off the SIM7000 module by goosing the PWR pin if simSleepMode = 1
   #ifdef printMode
@@ -2964,21 +2872,25 @@ void turnOffBoardLED(){             // Turn LED off
 //************************************************************WiFi Stuff
 void setupWifi(){
   #ifdef HA
-   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+   WiFi.begin(SECRET_WIFI_SSID, SECRET_WIFI_PASSWORD);
    while (WiFi.status() != WL_CONNECTED) {
      delay(500);
-     Serial.print(".");
+     #ifdef printMode
+       Serial.print(F("."));
+     #endif
    }
-   Serial.println(".");
-   Serial.print(" WiFi connected..");  
-   Serial.print("IP address: ");
-   Serial.println(WiFi.localIP());
+      #ifdef printMode
+        Serial.print(F("WiFi connected..  IP Address: "));
+        Serial.println(WiFi.localIP());
+      #endif
  #endif  
 }
 void connectToWifi() {
   #ifdef HA
-  Serial.println("Connecting to Wi-Fi...");
-  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+    #ifdef printMode
+      Serial.println(F("Connecting to Wi-Fi..."));
+    #endif
+    WiFi.begin(SECRET_WIFI_SSID, SECRET_WIFI_PASSWORD);
   #endif
 }
 
@@ -2987,13 +2899,16 @@ void WiFiEvent(WiFiEvent_t event) {
    
   switch(event) {
     case SYSTEM_EVENT_STA_GOT_IP:
-      Serial.println("WiFi connected");
-      Serial.println("IP address: ");
-      Serial.println(WiFi.localIP());
+      #ifdef printMode
+        Serial.print(F("WiFi connected..  IP Address: "));
+        Serial.println(WiFi.localIP());
+      #endif
       connectToMqtt();
       break;
     case SYSTEM_EVENT_STA_DISCONNECTED:
-      Serial.println("WiFi lost connection");
+      #ifdef printMode
+        Serial.println(F("WiFi lost connection"));
+      #endif
       xTimerStop(mqttReconnectTimer, 0); // ensure we don't reconnect to MQTT while reconnecting to Wi-Fi
       xTimerStart(wifiReconnectTimer, 0);
       break;
@@ -3022,10 +2937,11 @@ void setupMQTT(){
     #endif
 }
 void connectToMqtt() {
-    #ifdef HA
-
-  Serial.println("\nConnecting to MQTT...");
-  mqttClient.connect();
+  #ifdef HA
+      #ifdef printMode
+        Serial.println(F("\nConnecting to MQTT..."));
+      #endif
+    mqttClient.connect();
   #endif
 }
 
@@ -3045,7 +2961,7 @@ void onMqttConnect(bool sessionPresent) {
 void publishMQTT(){
   #ifdef HA
     #ifdef CASA_1
-      Serial.println(F("publishMQTT"));
+      Serial.println(F("*publishMQTT*"));
       //mqttClient.publish(strcat(location[1],TEMPERATURE_TOPIC), 0, false, (String(platform[1].temperature)).c_str());
       mqttClient.publish(TEMPERATURE_TOPIC, 0, false, (String(platform[1].temperature)).c_str());
       mqttClient.publish(HUMIDITY_TOPIC, 0, false, (String(platform[1].humidity)).c_str());
@@ -3083,22 +2999,20 @@ void publishMQTT(){
       mqttClient.publish(BATHROOM2_HUMIDITY_TOPIC, 0, false, (String(platform[6].humidity)).c_str());
       mqttClient.publish(BATHROOM2_PRESSURE_TOPIC, 0, false, (String(platform[6].pressure)).c_str());
       mqttClient.publish(BATHROOM2_PIR_TOPIC, 0, false, (String(platform[6].pir)).c_str());
-//needs work to verify these sensors hav0 pir, then reset so HA deteccts next pir = 1
-      //delay(10000);
-      platform[1].doorCount=0;
-      //platform[0].pir=0;
-      platform[1].pir=0;
-      platform[4].pir=0;
-      platform[5].pir=0;
-      platform[6].pir=0;
+
+      //platform[1].doorCount=0;
+      //platform[1].pir=0;
+      //platform[4].pir=0;
+      //platform[5].pir=0;
+      //platform[6].pir=0;
       //platform[1].sendFailures=0;
-      mqttClient.publish(KITCHEN_PIR_TOPIC, 0, false, (String(platform[1].pir)).c_str());
-      mqttClient.publish(KITCHEN_PIR_TOPIC, 0, false, (String(platform[4].pir)).c_str());
-      mqttClient.publish(BATHROOM_PIR_TOPIC, 0, false, (String(platform[5].pir)).c_str());
-      mqttClient.publish(BATHROOM2_PIR_TOPIC, 0, false, (String(platform[6].pir)).c_str());
+      //mqttClient.publish(KITCHEN_PIR_TOPIC, 0, false, (String(platform[1].pir)).c_str());
+      //mqttClient.publish(KITCHEN_PIR_TOPIC, 0, false, (String(platform[4].pir)).c_str());
+      //mqttClient.publish(BATHROOM_PIR_TOPIC, 0, false, (String(platform[5].pir)).c_str());
+      //mqttClient.publish(BATHROOM2_PIR_TOPIC, 0, false, (String(platform[6].pir)).c_str());
     #endif  //CASA_1
     #ifdef CASA_2
-      Serial.println(F("publishMQTT"));
+      Serial.println(F("*publishMQTT*"));
       //HUB:
       mqttClient.publish(HUB_TEMPERATURE_TOPIC, 0, false, (String(platform[0].temperature)).c_str());
       mqttClient.publish(HUB_HUMIDITY_TOPIC, 0, false, (String(platform[0].humidity)).c_str());
@@ -3142,33 +3056,35 @@ void publishMQTT(){
       mqttClient.publish(BATHROOM_LUX_TOPIC, 0, false, (String(platform[4].lux)).c_str());
       mqttClient.publish(BATHROOM_SEND_FAILURES_TOPIC, 0, false, (String(platform[4].sendFailures)).c_str()); 
 
-
-//needs work to verify these sensors hav0 pir, then reset so HA deteccts next pir = 1
-      //delay(10000);
-      platform[3].doorCount=0;
-      platform[1].pir=0;
-      platform[3].pir=0;
-     //platform[1].sendFailures=0;
-      mqttClient.publish(BASEMENT_PIR_TOPIC, 0, false, (String(platform[1].pir)).c_str());
-      mqttClient.publish(KITCHEN_PIR_TOPIC, 0, false, (String(platform[3].pir)).c_str());
+      //platform[3].doorCount=0;
+     // platform[1].pir=0;
+      //platform[3].pir=0;
+      //mqttClient.publish(BASEMENT_PIR_TOPIC, 0, false, (String(platform[1].pir)).c_str());
+      //mqttClient.publish(KITCHEN_PIR_TOPIC, 0, false, (String(platform[3].pir)).c_str());
     #endif //CASA_2
   #endif
 }
 
   #ifdef HA
 void onMqttDisconnect(AsyncMqttClientDisconnectReason reason) {
-  Serial.println("Disconnected from MQTT.");
+  #ifdef printMode
+    Serial.println(F("Disconnected from MQTT."));
+  #endif
   if (WiFi.isConnected()) {
     xTimerStart(mqttReconnectTimer, 0);
   }
 }
 
 void onMqttSubscribe(uint16_t packetId, uint8_t qos) {
-  Serial.println("Subscribe acknowledged.");
+  #ifdef printMode
+    Serial.println(F("Subscribe acknowledged."));
+  #endif
 }
 
 void onMqttUnsubscribe(uint16_t packetId) {
-  Serial.println("Unsubscribe acknowledged.");
+  #ifdef printMode
+    Serial.println(F("Unsubscribe acknowledged."));
+  #endif  
 }
 
 void onMqttPublish(uint16_t packetId) {
@@ -3217,21 +3133,24 @@ void onMqttMessage(char* topic, char* payload, AsyncMqttClientMessageProperties 
 #ifdef TELEGRAM
 //Handle what happens when you receive new messages
 void handleNewMessages(int numNewMessages) {
-  Serial.println("handleNewMessages");
-  Serial.println(String(numNewMessages));
+  #ifdef printMode
+    Serial.print(F("handleNewMessages  --> "));
+    Serial.println(String(numNewMessages));
+  #endif  
 
   for (int i=0; i<numNewMessages; i++) {
     // Chat id of the requester
     String chat_id = String(bot.messages[i].chat_id);
-    if (chat_id != CHAT_ID){
+    if (chat_id != SECRET_CHAT_ID){
       bot.sendMessage(chat_id, "Unauthorized user", "");
       continue;
     }
     
     // Print the received message
     String text = bot.messages[i].text;
-    Serial.println(text);
-
+    #ifdef printMode
+      Serial.println(text);
+    #endif
     String from_name = bot.messages[i].from_name;
 
     if (text == "/start") {

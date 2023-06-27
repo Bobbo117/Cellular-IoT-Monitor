@@ -1,11 +1,12 @@
 
 const char* APP = "AmbientAP ";
-const char* VERSION = "2023 v0614";
+const char* VERSION = "2023 v0626";
 
 /*
  * 3/23 create ID=4,5,6 pir bme
  * use pin34 for pir on d1 mini esp32 was sonic sensor
  * 3/25 cleanup pir, pirCount handling
+ * 6/26 secrets file for HUB AC address
  */
 /////////////////////////////////////////////////////////////////////////////////////
 //
@@ -53,32 +54,28 @@ NOTES -  1. IF using MELife for ESP32 ESP-32S Development Board, use Arduino IDE
             -->OFF at GET humidity
             -->OFF at  sleep     
 */
-
+   
 //////////////////////////////////////////////////////////////  
-
-//*******         Compile-time Options           ***********//
+//*******     Setup secrets.h file               ***********//
+//               
 //////////////////////////////////////////////////////////////
 
-  //*****************
-  // 1. Secrets file option:
-  //*****************
-    #define gateway        //optional internet gateway (router) in use by destination device (Hub)
-    #ifdef gateway
-      #include <secrets.h>  //need to know router ssid in order to use same channel 
-    #endif  
+      #include <secrets.h>   // secrets.h file contents follow:
 
-  //*****************
-  // 1. Select applicable hardware device below: 
-  // Board selection impacts pin assignments, setup of pin modes, 
-  // pwr on & off pulse duration, and onboard LED on/off states
-  //*****************
-  #define ESP32           //Recommended choice is esp32
-  //#define d1MiniESP32     //select ESP32 and d1MiniESP32 if diMiniESP32 is used
-  //#define ESP8266       //use for wemos D1 Mini.  
-                          //NOTE Multiple D1 Minis seem to interfere with one another and have limited wireless range
-  //*****************
-  // 2. Operatiing Modes
-  //*****************
+  //  HUB MAC Address:
+  //  uint8_t SECRET_broadcastAddress[] = {0x8C, 0xAA, 0xB3, 0x85, 0x6A, 0x67};  //example for Mac Address 8C:AA:B3:85:6A:67
+
+//////////////////////////////////////////////////////////////  
+//*******         Compile-time Options           ***********//
+//        (Disable unwanted options with leading //)
+//////////////////////////////////////////////////////////////
+
+  #define gateway        //optional internet gateway (router) in use by destination device (Hub).
+                         //AmbientAP will determine the wifi channel being used to communicate with the hub
+
+  //*******************************   
+  // 1. Select debug aids/monitors:
+  //*******************************
   #define printMode           //option: comment out if no printout to Serial monitor 
   #define OLED_               //option: comment out if no OLED display 128x64
   #ifdef OLED_
@@ -89,6 +86,16 @@ NOTES -  1. IF using MELife for ESP32 ESP-32S Development Board, use Arduino IDE
   #endif
   bool reportFlag = true;     //issue report to HUB after startup, also when new data exists 
   
+  //*****************
+  // 2. Select applicable hardware device below: 
+  // Board selection impacts pin assignments, setup of pin modes, 
+  // pwr on & off pulse duration, and onboard LED on/off states
+  //*****************
+  #define ESP32           //Recommended choice is esp32
+  //#define d1MiniESP32     //select ESP32 and d1MiniESP32 if diMiniESP32 is used
+  //#define ESP8266       //use for wemos D1 Mini.  
+                          //NOTE Multiple D1 Minis seem to interfere with one another and have limited wireless range
+
   //*****************                                                                                    
   // 3. Timing Parameters
   //    NOTE: Wemos D1 Mini 8266 max sleep time is 71 minutes = 4260 seconds
@@ -231,30 +238,12 @@ NOTES -  1. IF using MELife for ESP32 ESP-32S Development Board, use Arduino IDE
 
   //*****************
   // 6. Select one of the 3 following protocols for communication between HUB and sensor platforms; 
-  // ESPNOW_1to1 is preferred; NOTE: WIFI is a memory hog:
+  // ESPNOW_1to1 is preferred; NOTE: HTTPGET is a memory hog:
   //*****************
-  //#define WIFI          //set up as wifi server w/o router
-  #define ESPNOW_1to1     //send data to one peer: enter MAC address of receiver in next section    
-  //#define ESPNOW_1toN   //send to multiple peers: enter MAC addresses of receivers in next section 
-
-  //*****************
-  // if selecting ESPNOW_1to1 enter 1 MAC Address for hub; ESPNOW_1toN, enter 4 MAC addresses; 
-  //******************
-  #ifdef ESPNOW_1to1
-    //uint8_t broadcastAddress[] = {0xAC, 0x67, 0xB2, 0x2B, 0x6D, 0x00};  //example for esp32 #7 MAC Address AC:67:B2:2B:6D:00
-    //uint8_t broadcastAddress[] = {0x8C, 0xAA, 0xB5, 0x85, 0x6A, 0x68};  //esp32 #12 Mac Address 8C:AA:B5:85:6A:68
-     //uint8_t broadcastAddress[] = {0xA8, 0x03, 0x2A, 0x74, 0xBE, 0x8C};  // FL LILLYGO MAC Address A8:03:2A:74:BE:8C
-    uint8_t broadcastAddress[] = {0x40, 0x91, 0x51, 0x30, 0x62, 0x94};   // ME lillygo2: 40:91:51:30:62:94
-  #endif
-  #ifdef ESPNOW_1toN
-    //comment these out and use your own AmbientHUB or other peer MAC addresses:
-    uint8_t broadcastAddress1[] = {0xA8, 0x03, 0x2A, 0x74, 0xBE, 0x8C};  //LILLYGO MAC Address A8:03:2A:74:BE:8C
-    uint8_t broadcastAddress2[] = {0x78, 0x21, 0x84, 0x7F, 0x82, 0x14};  //esp32 #11 Mac Address 78:21:84:7F:82:14
-    uint8_t broadcastAddress3[] = {0x7C, 0x9E, 0xBD, 0xE3, 0xC5, 0xC8};  //esp32 #9 Mac Address 7C:9E:BD:E3:C5:C8
-    //uint8_t broadcastAddress4[] = {0x8C, 0xAA, 0xB5, 0x85, 0x6A, 0x68};  //esp32 #12 Mac Address 8C:AA:B5:85:6A:68
-    uint8_t broadcastAddress4[] = {0xAC, 0x67, 0xB2, 0x2B, 0x6D, 0x00};  //esp32 #7 MAC Address AC:67:B2:2B:6D:00
-  #endif
-  
+  //#define HTTPGET          //set up as wifi server w/o router to transfer data upon receiving a http GET message
+  #define ESPNOW_1to1     //send data to one peer: enter MAC address of receiver in secrets.h file  
+  //#define ESPNOW_1toN   //send to multiple peers: enter MAC addresses of receivers in secrets.h file   (not functional yet) 
+ 
   //*****************                                                                                    //*****************
   // 7. ESPNOW Parameters (if ESPNOW is selected)
   //*****************
@@ -358,12 +347,12 @@ NOTES -  1. IF using MELife for ESP32 ESP-32S Development Board, use Arduino IDE
       uint8_t lux;             // 0-99 % of full illumination
       uint8_t aH2o;            // 0-99 % of full sensor level detection
       uint8_t dH2o;            // 0 or 1 digital readout 0=dry  (normal state)
-      uint8_t doorCount;       // # times door opened and closed after previous report.
+      uint8_t doorCount;       // # times door opened and closed after previous successful report to HUB
       uint8_t door;            // door = 0 when closed, 1 when open
       uint8_t pir;             // pir = 0 no motion, 1 for motion 
       uint16_t sonic;          // 0=absent 1=present
       uint8_t sendFailures;    // # failed attempts to send via espNow
-      uint8_t pirCount;        // # times pir detected motion after previous report via cellular
+      uint8_t pirCount;        // # times pir detected motion after previous successful report to HUB
   } platforms;
   
   #ifdef ESP32  //store the reaadings persistently if esp32
@@ -392,7 +381,7 @@ NOTES -  1. IF using MELife for ESP32 ESP-32S Development Board, use Arduino IDE
   //*****************
   // WIFI Server Libraries
   //*****************
-  #ifdef WIFI
+  #ifdef HTTPGET
     #ifdef ESP32
       #include <WiFi.h>                  // wifi libr for esp32
     #endif
@@ -773,7 +762,7 @@ int32_t getWiFiChannel(const char *ssid) {
 void printSensorData(){
   #ifdef printMode  
     Serial.println(F("*printSensorData*"));
-    Serial.println(F("id      temp    hum    pres    lux    aH2o    dH2o    door   doorCount  sonic   pir  Fails"));    
+    Serial.println(F("id      temp    hum    pres    lux    aH2o    dH2o    door   doorCount  sonic   pir  pir#   Fails"));    
     Serial.print(sensorData.id);Serial.print(F("\t"));
     Serial.print(sensorData.temperature);Serial.print(F("\t"));
     Serial.print(sensorData.humidity);Serial.print(F("\t"));
@@ -785,6 +774,7 @@ void printSensorData(){
     Serial.print(sensorData.doorCount);Serial.print(F("\t"));
     Serial.print(sensorData.sonic);Serial.print(F("\t"));
     Serial.print(sensorData.pir);Serial.print(F("\t"));
+    Serial.print(sensorData.pirCount);Serial.print(F("\t"));
     Serial.print(sensorData.sendFailures);Serial.println(F("\t"));
   #endif  
 }
@@ -1099,7 +1089,7 @@ void sendEspNow_1to1(){
     sensorData.id = sensorID;
     //printSensorData();
 
-    esp_err_t espResult = esp_now_send(broadcastAddress, (uint8_t *) &sensorData, sizeof(sensorData)); // Send message via ESP-NOW
+    esp_err_t espResult = esp_now_send(SECRET_broadcastAddress, (uint8_t *) &sensorData, sizeof(sensorData)); // Send message via ESP-NOW
     #ifdef printMode
       if (espResult == ESP_OK) { 
         Serial.println(F(" Sent with success"));
@@ -1195,7 +1185,7 @@ void setupESPNOW_1to1(){
     esp_now_register_send_cb(ESPNOW_1to1_OnDataSent);
     
     // Register peer
-    memcpy(peerInfo.peer_addr, broadcastAddress, 6);
+    memcpy(peerInfo.peer_addr, SECRET_broadcastAddress, 6);
     peerInfo.channel = 0;  
     peerInfo.encrypt = false;
     
@@ -1236,7 +1226,7 @@ void setupESPNOW_1toN(){
     peerInfo.encrypt = false;
     
     // register first peer  
-    memcpy(peerInfo.peer_addr, broadcastAddress1, 6);
+    memcpy(peerInfo.peer_addr, SECRET_broadcastAddress1, 6);
     if (esp_now_add_peer(&peerInfo) != ESP_OK){
       #ifdef printMode
         Serial.println(F("Failed to add peer1"));
@@ -1244,7 +1234,7 @@ void setupESPNOW_1toN(){
       return;
     }
     // register second peer  
-    memcpy(peerInfo.peer_addr, broadcastAddress2, 6);
+    memcpy(peerInfo.peer_addr, SECRET_broadcastAddress2, 6);
     if (esp_now_add_peer(&peerInfo) != ESP_OK){
       #ifdef printMode
         Serial.println(F("Failed to add peer2"));
@@ -1252,7 +1242,7 @@ void setupESPNOW_1toN(){
       return;
     }
     // register third peer
-    memcpy(peerInfo.peer_addr, broadcastAddress3, 6);
+    memcpy(peerInfo.peer_addr, SECRET_broadcastAddress3, 6);
     if (esp_now_add_peer(&peerInfo) != ESP_OK){
       #ifdef printMode
         Serial.println(F("Failed to add peer3"));
@@ -1260,7 +1250,7 @@ void setupESPNOW_1toN(){
       return;
     }
     // register fourth peer
-    memcpy(peerInfo.peer_addr, broadcastAddress4, 6);
+    memcpy(peerInfo.peer_addr, SECRET_broadcastAddress4, 6);
     if (esp_now_add_peer(&peerInfo) != ESP_OK){
       #ifdef printMode
         Serial.println(F("Failed to add peer4"));
@@ -1405,7 +1395,7 @@ void setupWakeupConditions(){
 //*************************************
 void setupWifiServer(){
   //Initializes WIFI server for access to clients that issue GET commands to retrieve sensor data
-  #ifdef WIFI
+  #ifdef HTTPGET
     #ifdef printMode
       Serial.println(F("*setupWifiServer*"));
       Serial.print(F("sensorID: "));Serial.println(sensorID);
