@@ -89,8 +89,7 @@ immediate alerts when sensors cross adaptive thresholds.
 
 ### Builtin Modules
 
--   An ESP32 or a D1 Mini 8266 micro-controller
-    https://www.amazon.com/MELIFE-Development-Dual-Mode-Microcontroller-Integrated/dp/B07Q576VWZ?th=1
+-   An [ESP32](//www.amazon.com/MELIFE-Development-Dual-Mode-Microcontroller-Integrated/dp/B07Q576VWZ?th=1) or a D1 Mini 8266 micro-controller
 
 -   temperature / humidity sensors
    `BME-280`, MCP9808, `DHTxx`, AHT10, SHT20
