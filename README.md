@@ -26,15 +26,15 @@ and an optional **OLED** display.
 
 ## Tested With
 
--   **Botletics** `SIM7000A` cellular modem Arduino shield 
-    https://github.com/botletics/SIM7000-LTE-Shield/wiki
+-   [**Botletics** `SIM7000A` cellular modem Arduino shield]( 
+    https://github.com/botletics/SIM7000-LTE-Shield/wiki)
 
--   **LiLLYGO** `SIM7000G` board with 
-    integrated **ESP32** Wrover
-    http://www.lilygo.cn/prod_view.aspx?TypeId=50033&Id=1246&FId=t3:50033:3
+-   [**LiLLYGO** `SIM7000G` board with 
+    integrated **ESP32** Wrover](
+    http://www.lilygo.cn/prod_view.aspx?TypeId=50033&Id=1246&FId=t3:50033:3)
 
--   **and-global** `SIM7000A` module
-    https://www.and-global.com/
+-   [**and-global** `SIM7000A` module](
+    https://www.and-global.com/)
 
 <br>
 <br>
