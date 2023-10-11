@@ -26,15 +26,15 @@ and an optional **OLED** display.
 
 ## Tested With
 
--   **Botletics** `SIM7000A` cellular modem Arduino shield 
-    https://github.com/botletics/SIM7000-LTE-Shield/wiki
+-   [**Botletics** `SIM7000A` cellular modem Arduino shield]( 
+    https://github.com/botletics/SIM7000-LTE-Shield/wiki)
 
--   **LiLLYGO** `SIM7000G` board with 
-    integrated **ESP32** Wrover
-    http://www.lilygo.cn/prod_view.aspx?TypeId=50033&Id=1246&FId=t3:50033:3
+-   [**LiLLYGO** `SIM7000G` board with 
+    integrated **ESP32** Wrover](
+    http://www.lilygo.cn/prod_view.aspx?TypeId=50033&Id=1246&FId=t3:50033:3)
 
--   **and-global** `SIM7000A` module
-    https://www.and-global.com/
+-   [**and-global** `SIM7000A` module](
+    https://www.and-global.com/)
 
 <br>
 <br>
@@ -97,23 +97,23 @@ immediate alerts when sensors cross adaptive thresholds.
 -   An optional `SSD1306` OLED display 
     https://www.amazon.com/gp/product/B07W1PT6VK
 
--   door / window sensors
-    https://www.amazon.com/dp/B09BJLRK4S/
+-   [door / window sensors](
+    https://www.amazon.com/dp/B09BJLRK4S/)
 
--   illumination sensors
-    https://www.amazon.com/eBoot-Photoresistor-Sensitive-Resistor-Dependent/dp/B01N7V536K/
+-   [illumination sensors](
+    https://www.amazon.com/eBoot-Photoresistor-Sensitive-Resistor-Dependent/dp/B01N7V536K/)
 
--   flood sensors
-    https://www.amazon.de/-/en/Sensor-Moisture-Splash-Arduino-Raspberry/dp/B01MRIBI2M
+-   [flood sensors](
+    https://www.amazon.de/-/en/Sensor-Moisture-Splash-Arduino-Raspberry/dp/B01MRIBI2M)
     
--   PIR/ motion Sensors
-    https://www.amazon.com/DIYmall-HC-SR501-Motion-Infrared-Arduino/dp/B012ZZ4LPM
+-   [PIR/ motion Sensors](
+    https://www.amazon.com/DIYmall-HC-SR501-Motion-Infrared-Arduino/dp/B012ZZ4LPM)
     
--   HC-SR04 or HC-SR04P Ultrasonic sensor
-    https://www.amazon.com/dp/B07VZBYSLX/ref=cm_sw_em_r_mt_dp_05X0C8N082YTTBTS895K?_encoding=UTF8&psc=1&pldnSite=1
+-   [HC-SR04 or HC-SR04P Ultrasonic sensor](
+    https://www.amazon.com/dp/B07VZBYSLX/ref=cm_sw_em_r_mt_dp_05X0C8N082YTTBTS895K?_encoding=UTF8&psc=1&pldnSite=1)
     
--   DC 5V 1 Channel Relay Module Board Shield High/Low Level Trigger with Optocoupler
-    https://www.amazon.com/gp/product/B079FJSYGY/ref=ox_sc_act_title_11?smid=A11A70Q280RHPK&th=1
+-   [DC 5V 1 Channel Relay Module Board Shield High/Low Level Trigger with Optocoupler](
+    https://www.amazon.com/gp/product/B079FJSYGY/ref=ox_sc_act_title_11?smid=A11A70Q280RHPK&th=1)
     
     
 
