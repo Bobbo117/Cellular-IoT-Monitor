@@ -33,7 +33,7 @@ and an optional **OLED** display.
 
 -   [**LiLLYGO** `SIM7000G` board with 
     integrated **ESP32** Wrover](
-    http://www.lilygo.cn/prod_view.aspx?TypeId=50033&Id=1246&FId=t3:50033:3)
+    https://www.amazon.com/LILYGO-Development-ESP32-WROVER-B-Battery-T-SIM7000G/dp/B099RQ7BSR)
     
     https://www.amazon.com/LILYGO-Development-ESP32-WROVER-B-Battery-T-SIM7000G/dp/B099RQ7BSR
     
