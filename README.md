@@ -34,6 +34,10 @@ and an optional **OLED** display.
 -   [**LiLLYGO** `SIM7000G` board with 
     integrated **ESP32** Wrover](
     http://www.lilygo.cn/prod_view.aspx?TypeId=50033&Id=1246&FId=t3:50033:3)
+    
+    https://www.amazon.com/LILYGO-Development-ESP32-WROVER-B-Battery-T-SIM7000G/dp/B099RQ7BSR
+    
+    ![20230607_105519](https://github.com/Bobbo117/gpsTracker/assets/58577175/be021b8f-4aa4-4a6b-95e0-d9151d2ecfd4)
 
 -   [**and-global** `SIM7000A` module](
     https://www.and-global.com/)
