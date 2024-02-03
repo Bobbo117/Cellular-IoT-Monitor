@@ -9,6 +9,8 @@
 
 An inexpensive IoT SIM card gains access to the cloud via a cellular connection.
 
+The HUB connects to the cellular network or wifi or both.
+
 The HUB can operate as a stand-alone unit with its own sensors.
 
 The HUB can also collect data wirelessly from separate sensor platforms.
