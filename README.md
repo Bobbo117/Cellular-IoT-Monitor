@@ -24,7 +24,10 @@ micro-controller connected with onboard sensors
 and an optional **OLED** display.
 
 <br>
-<br>
+
+## Hands on Technology presentation of 2/2/2022
+
+Availble at doc/Cellular IoT Homewatch.pdf  
 
 ## Tested With
 
