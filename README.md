@@ -27,7 +27,7 @@ and an optional **OLED** display.
 
 ## Hands on Technology presentation of 2/2/2022
 
-Available ![here](doc/Cellular IoT Homewatch.pdf).  
+Available in the doc folder (see Cellular IoT Homewatch.pdf).  
 Additional development since then is reflected below and in the software.
 
 <br>
