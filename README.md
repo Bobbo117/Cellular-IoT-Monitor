@@ -30,7 +30,6 @@ and an optional **OLED** display.
 Available [here](doc/Cellular IoT Homewatch.pdf)  
 
 <br>
-<br>
 
 ## Tested With
 
