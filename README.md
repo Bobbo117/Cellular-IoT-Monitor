@@ -80,7 +80,7 @@ platform to the listed website services.
 
 -    https://ifttt.com/ for notifying to up to 20 email accounts plus Google sheets
 
--    https://dweet.io/ which simply saves the messages in scratchpad format
+-    https://dweet.io/ which simply saves the messages in scratchpad format as a backup in case of IFTTT failure
 
 ### Supported Services via Wifi
 
