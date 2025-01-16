@@ -1,16 +1,7 @@
 
 const char* APP = "AmbientAP ";
-const char* VERSION = "2023 v1011";
+const char* VERSION = "2023 v1102 ";
 
-/*
- * 3/23 create ID=4,5,6 pir bme
- * use pin34 for pir on d1 mini esp32 was sonic sensor
- * 3/25 cleanup pir, pirCount handling
- * 6/26 secrets file for HUB AC address
- * 9/29 #define casa1,2,2a get unique #define ID
- * 9/30 implement direct comm with HA if enabled by HA flag (in progress)
- * 10/7 implement direct comm with HA if enabled by HA flag 
- */
 /////////////////////////////////////////////////////////////////////////////////////
 //
 // AmbientAP is a flexible, multi-featured sensor platform.  It can:
@@ -29,7 +20,7 @@ const char* VERSION = "2023 v1011";
 //      ultrasonic sensors measure distance (car parking aid or car presence detector in garage for example) 
 //  5. report to 1 ESPNOW peer as a 1 to 1 peer or up to 4 peers as a 1 to many peer.
 //  6. sleep and wake up via a timer, an interrupt (such as a window being opened) or motion, or it can stay awake for continuous monitoring.
-//  7. sleep immediately after sending a successfully received ESPNOW message when configured as a 1 to 1 peer.
+//  7. sleep immediately after sending a successfully received ESPNOW message.
 //  8. operate with or without an OLED display.
 //  9. operate as one of many such devices using this software by assigning unique SensorID (1, 2, 3, etc.) to each sensor platform.
 //
@@ -63,46 +54,50 @@ NOTES -  1. IF using MELife for ESP32 ESP-32S Development Board, use Arduino IDE
 //               
 //////////////////////////////////////////////////////////////
 
-      #include <secrets.h>   // secrets.h file contents follow:
+  #include <secrets.h>   // secrets.h file contents follow:
 
-  //  HUB MAC Address:
+  //#define SECRET_WIFI_SSID           "your wifi ssid"
+  //#define SECRET_WIFI_PASSWORD       "your wifi password" 
+
+  // Home Assistant or other MQTT broker
+  //#define SECRET_MQTT_HOST "your mqtt host"  //12/29/2022
+  //#define SECRET_MQTT_PORT 1883
+  //#define SECRET_MQTT_USER_NAME "your mqtt user name"
+  //#define SECRET_MQTT_USER_PWD  "your mqtt password" 
+
+  //  HUB MAC Address (if you want to transmit to a cellular hub using ESPNOW):
   //  uint8_t SECRET_broadcastAddress[] = {0x8C, 0xAA, 0xB3, 0x85, 0x6A, 0x67};  //example for Mac Address 8C:AA:B3:85:6A:67
 
 //////////////////////////////////////////////////////////////  
 //*******         Compile-time Options           ***********//
 //        (Disable unwanted options with leading //)
 //////////////////////////////////////////////////////////////
+ // #define OTA             // Enable over the air software updates
 
+  #define HA              // Enable direct ommunication with Home Assistant for enhanced real time sensor updates and monitoring via local wifi.
 
-//  #define gateway        //optional internet gateway (router) in use by destination device (Hub).
+  #define gateway        //optional internet gateway (router) in use by destination device (Hub).
                          //AmbientAP will determine the wifi channel being used to communicate with the hub
+                         ///NOTE - Enable gateway if using ESPNOW and hub is reporting to Home Assistant!!
 
   //*****************************
   // 1. Select one CASA (reporting site which may have unique configuration):
+  // IMPORTANT: CHANGE SECRETS.H FILE IF CHANGING CASA !!!
   //*****************************
-  //#define CASA_1            // Site #1
+ // #define CASA_1            // Site #1 (FL)
   //#define CASA_1a
-  //#define CASA_2            // Site #2 LillyGo
-  #define CASA_2a             // Site# 2, unit a Botletics
+ //#define CASA_2            // Site #2 LillyGo
+  #define CASA_2a           // Site# 2, unit a Botletics
 
   //*****************
   // 2. Select unique sensorID
   //*****************
-
-  // #define ID1    //FL gar door  ME #1 basement
-  #define ID2       //FL car sonic ME bedroom
-  // #define ID3    //FL car hatch ME kitchen
-  // #define ID4    //FL ME bathroom
-  // #define ID5    //FL bath ME #13 bath
-  // #define ID6    //FL bath2
-
-  //////////////////////////////////////////////////////////////  
-  //*******         Compile-time Options           ***********//
-  //        (Disable unwanted options with leading //)
-  //////////////////////////////////////////////////////////////
- // #define adaMQTT             // enables use of adafruit mqtt publish; get a free account at www.adafruit.io, then 
-                              // use this account to access ifttt for a more reliable experience than ifttt direct.
-  //#define HA                  // Enable ommunication with Home Assistant for enhanced real time sensor updates and monitoring via local wifi.
+//   #define ID1    //FL gar door  ME basement
+   #define ID2       //FL car sonic ME 2 bedroom 2a gur=est bath wh-BL
+//  #define ID3    //FL car hatch ME kitchen
+//  #define ID4    //FL Kitchen ME bathroom
+  //#define ID5    //FL bath ME #13 bath
+ //  #define ID6    //FL bath2 / lanai
 
   //*******************************   
   // 3. Select debug aids/monitors:
@@ -119,22 +114,12 @@ NOTES -  1. IF using MELife for ESP32 ESP-32S Development Board, use Arduino IDE
   uint8_t haPublishFlag = 0;  //issue report to HA if #define HA
 
   //*****************
-  // 6. Select one of the 3 following protocols for communication between HUB and sensor platforms; 
+  // 6. Select one of the 3 following protocols for communication between HUB and sensor platforms if there is a hub; 
   // ESPNOW_1to1 is preferred; NOTE: HTTPGET is a memory hog:
   //*****************
   //#define HTTPGET          //set up as wifi server w/o router to transfer data upon receiving a http GET message
   #define ESPNOW_1to1     //send data to one peer: enter MAC address of receiver in secrets.h file  
   //#define ESPNOW_1toN   //send to multiple peers: enter MAC addresses of receivers in secrets.h file   (not functional yet) 
-
-  //*****************
-  // 4. Select applicable hardware device below: 
-  // Board selection impacts pin assignments, setup of pin modes, 
-  // pwr on & off pulse duration, and onboard LED on/off states
-  //*****************
-  #define ESP32_           //Recommended choice is esp32
-  //#define d1MiniESP32_    //select ESP32 and d1MiniESP32 if diMiniESP32 is used
-  //#define ESP8266_       //use for wemos D1 Mini.  
-                          //NOTE Multiple D1 Minis seem to interfere with one another and have limited wireless range
 
   //*****************                                                                                    
   // 5. Timing Parameters
@@ -155,37 +140,64 @@ NOTES -  1. IF using MELife for ESP32 ESP-32S Development Board, use Arduino IDE
   //#define SHT20_        // DFRobot SHT20
 
   #ifdef CASA_1
-    const int sleepSeconds = 8*60;       //8*60 default sleep time in seconds; 0 if no sleep   
-    const long awakeSeconds = 2*60;      //2*60 default interval in seconds to stay awake as server; ignored if sleepSeconds = 0 
-    const long chillSeconds = 10;        //interval between readings if sleepSeconds = 0 slows serial monitor updates
-
+    #ifndef ID2
+      const int sleepSeconds = 8*60;       //8*60 default sleep time in seconds; 0 if no sleep   
+      const long awakeSeconds = 2*60;      //2*60 default interval in seconds to stay awake as server; ignored if sleepSeconds = 0 
+      const long chillSeconds = 10;        //interval between readings if sleepSeconds = 0 slows serial monitor updates
+    #endif
+    #ifdef ID2
+      const int sleepSeconds = 0;          //8*60 default sleep time in seconds; 0 if no sleep                                              
+      const long awakeSeconds = 2*60;      //2*60 default interval in seconds to stay awake as server; ignored if sleepSeconds = 0 
+      const long chillSeconds = 10;        //interval between readings if sleepSeconds = 0 slows serial monitor updates
+    #endif
     #ifdef ID1  
       uint8_t sensorID = 1;
-      #define displayTitle " ~AMBIENT 1~" 
+      #define displayTitle " ~AMBIENT 1~"
       const char* ssid = "AMBIENT_1";
-      #define AHT10_        
+      #define BME_ 
+      
+      #define ESP32_           //Recommended choice is esp32
+      //#define d1MiniESP32_     //select ESP32 and d1MiniESP32 if diMiniESP32 is used
+      //#define ESP8266_       //use for wemos D1 Mini.  
+                               //NOTE Multiple D1 Minis seem to interfere with one another and have limited wireless range       
     #endif
 
     #ifdef ID2
       uint8_t sensorID = 2; 
       const char* ssid = "AMBIENT_2";
       #define displayTitle " ~AMBIENT 2~"
-      #define DHT_            
+      //#define DHT_   
+
+      #define ESP32_           //Recommended choice is esp32
+      //#define d1MiniESP32_     //select ESP32 and d1MiniESP32 if diMiniESP32 is used
+      //#define ESP8266_       //use for wemos D1 Mini.  
+                               //NOTE Multiple D1 Minis seem to interfere with one another and have limited wireless range       
     #endif
   
     #ifdef ID3
       uint8_t sensorID = 3;
       #define displayTitle " ~AMBIENT 3~"
       const char* ssid = "AMBIENT_3";
-      #define DHT_           
+      #define DHT_ 
+
+      #define ESP32_           //Recommended choice is esp32
+      //#define d1MiniESP32_     //select ESP32 and d1MiniESP32 if diMiniESP32 is used
+      //#define ESP8266_       //use for wemos D1 Mini.  
+                               //NOTE Multiple D1 Minis seem to interfere with one another and have limited wireless range                 
     #endif
   
     #ifdef ID4
-      //FL kitchen used for temp hum and pir motion to cause watermani standby
+      //FL kitchen used for temp hum and pir motion to cause watermain standby
       uint8_t sensorID = 4;
       #define displayTitle "~AMBIENT4~"
       const char* ssid = "AMBIENT_4";
-      #define DHT_           
+      #define AHT10_  
+      
+      #define ESP32_           //Recommended choice is esp32
+      //#define d1MiniESP32_     //select ESP32 and d1MiniESP32 if diMiniESP32 is used
+      //#define ESP8266_       //use for wemos D1 Mini.  
+                               //NOTE Multiple D1 Minis seem to interfere with one another and have limited wireless range                 
+         
     #endif
   
     #ifdef ID5
@@ -193,7 +205,13 @@ NOTES -  1. IF using MELife for ESP32 ESP-32S Development Board, use Arduino IDE
       uint8_t sensorID = 5;
       #define displayTitle "~AMBIENT5~"
       const char* ssid = "AMBIENT_5";
-      #define DHT_           
+      #define BME_ 
+
+      #define ESP32_           //Recommended choice is esp32
+      #define d1MiniESP32_     //select ESP32 and d1MiniESP32 if diMiniESP32 is used
+      //#define ESP8266_       //use for wemos D1 Mini.  
+                               //NOTE Multiple D1 Minis seem to interfere with one another and have limited wireless range                 
+
     #endif
   
     #ifdef ID6
@@ -201,7 +219,12 @@ NOTES -  1. IF using MELife for ESP32 ESP-32S Development Board, use Arduino IDE
       uint8_t sensorID = 6;
       #define displayTitle "~AMBIENT6~"
       const char* ssid = "AMBIENT_6";
-      #define DHT_           
+      #define AHT10_ 
+
+      #define ESP32_           //Recommended choice is esp32
+      //#define d1MiniESP32_     //select ESP32 and d1MiniESP32 if diMiniESP32 is used
+      //#define ESP8266_       //use for wemos D1 Mini.  
+                               //NOTE Multiple D1 Minis seem to interfere with one another and have limited wireless range                                 
     #endif
 
   #endif
@@ -215,7 +238,12 @@ NOTES -  1. IF using MELife for ESP32 ESP-32S Development Board, use Arduino IDE
       uint8_t sensorID = 1;
       #define displayTitle "CASA_2 #1 "   
       const char* ssid = "AMBIENT_1";
-      #define DHT_     
+      #define DHT_ 
+
+      #define ESP32_           //Recommended choice is esp32
+      //#define d1MiniESP32_     //select ESP32 and d1MiniESP32 if diMiniESP32 is used
+      //#define ESP8266_       //use for wemos D1 Mini.  
+                               //NOTE Multiple D1 Minis seem to interfere with one another and have limited wireless range                 
     #endif
 
     #ifdef ID2
@@ -223,6 +251,12 @@ NOTES -  1. IF using MELife for ESP32 ESP-32S Development Board, use Arduino IDE
       const char* ssid = "AMBIENT_2";
       #define displayTitle "CASA_2 #2"
       #define DHT_            // DHT11,21,22, etc.
+
+      #define ESP32_           //Recommended choice is esp32
+      //#define d1MiniESP32_     //select ESP32 and d1MiniESP32 if diMiniESP32 is used
+      //#define ESP8266_       //use for wemos D1 Mini.  
+                               //NOTE Multiple D1 Minis seem to interfere with one another and have limited wireless range                 
+
     #endif
       
     #ifdef ID3
@@ -230,6 +264,25 @@ NOTES -  1. IF using MELife for ESP32 ESP-32S Development Board, use Arduino IDE
       #define displayTitle "CASA_2 #3"
       const char* ssid = "AMBIENT_3";
       #define DHT_            // DHT11,21,22, etc.
+
+      #define ESP32_           //Recommended choice is esp32
+      //#define d1MiniESP32_     //select ESP32 and d1MiniESP32 if diMiniESP32 is used
+      //#define ESP8266_       //use for wemos D1 Mini.  
+                               //NOTE Multiple D1 Minis seem to interfere with one another and have limited wireless range                 
+
+    #endif
+
+    #ifdef ID4
+      uint8_t sensorID = 4;
+      #define displayTitle "CASA_2 #4"
+      const char* ssid = "AMBIENT_4";
+      #define AHT10_         // DHT11,21,22, etc.
+
+      #define ESP32_           //Recommended choice is esp32
+      //#define d1MiniESP32_     //select ESP32 and d1MiniESP32 if diMiniESP32 is used
+      //#define ESP8266_       //use for wemos D1 Mini.  
+                               //NOTE Multiple D1 Minis seem to interfere with one another and have limited wireless range                 
+
     #endif
 
   #endif
@@ -243,14 +296,26 @@ NOTES -  1. IF using MELife for ESP32 ESP-32S Development Board, use Arduino IDE
       uint8_t sensorID = 1;
       #define displayTitle "CASA_2a #1 "   
       const char* ssid = "AMBIENT_1a";
-      #define DHT_            //ME DHT11,21,22, etc.
+      #define AHT10_ 
+
+      #define ESP32_           //Recommended choice is esp32
+      //#define d1MiniESP32_     //select ESP32 and d1MiniESP32 if diMiniESP32 is used
+      //#define ESP8266_       //use for wemos D1 Mini.  
+                               //NOTE Multiple D1 Minis seem to interfere with one another and have limited wireless range                 
+
     #endif
 
     #ifdef ID2
       uint8_t sensorID = 2;
       const char* ssid = "AMBIENT_2a";
       #define displayTitle "CASA_2a #2"
-      #define AHT10_      
+      #define AHT10_ 
+
+      #define ESP32_           //Recommended choice is esp32
+      //#define d1MiniESP32_     //select ESP32 and d1MiniESP32 if diMiniESP32 is used
+      //#define ESP8266_       //use for wemos D1 Mini.  
+                               //NOTE Multiple D1 Minis seem to interfere with one another and have limited wireless range                 
+
     #endif
 
   #endif
@@ -262,24 +327,21 @@ NOTES -  1. IF using MELife for ESP32 ESP-32S Development Board, use Arduino IDE
   // HUB  id=0; boards are 1,2,3.. example: temps[]={1,0,1,0} indicates hub and sensor #2 have temp sensors, sensor #1 and #3 do not.
 
   #ifdef CASA_1
-    #define numberOfPlatforms 4        // number of sensor platforms available  + 1 for HUB
-                                        //const char* location[] = {"hub","garage","sonic","hatch", "kitchen","bathroom","bathroom2,"spare"};
- //   uint8_t temps[] = {1,1,0,0, 1,1,1,0}, hums[]=  {1,1,0,0, 1,1,1,0}, dbms[]= {1,0,0,0, 0,0,0,0}, press[]={1,0,0,0, 0,1,0,0}, bat[]=   {0,0,0,0, 0,0,0,0};
- //   uint8_t luxs[] =  {0,1,0,0, 1,0,0,0}, h2os[] = {0,0,0,0, 0,0,0,0}, doors[]={0,1,0,0, 1,0,0,0}, pirs[]={0,1,0,0, 1,1,1,0}, sonics[]={0,0,1,0, 0,0,0,0};
+    //const char* location[] = {"hub","garage","sonic","hatch",      "kitchen","bathroom","bathroom2,"spare"};
+    uint8_t temps[] = {1,1,0,0, 1,1,1,0}, hums[]=  {1,1,0,0, 1,1,1,0}, dbms[]= {1,0,0,0, 0,0,0,0}, press[]={0,0,0,0, 0,0,0,0}, bat[]=   {0,0,0,0, 0,0,0,0};
+    uint8_t luxs[] =  {0,0,0,0, 0,0,0,0}, h2os[] = {0,0,0,0, 0,0,0,0}, doors[]={0,1,0,1, 0,0,0,0}, pirs[]={0,1,0,0, 1,1,1,0}, sonics[]={0,0,1,0, 0,0,0,0};
   #endif
   
   #ifdef CASA_2:
-    #define numberOfPlatforms 4       // number of sensor platforms available  + 1 for HUB
-                                        //const char* location[] = {"hub","basement","bedroom","kitchen","bathroom","spare","spare","spare"};
+    //const char* location[] = {"hub","basement","bedroom","kitchen","bathroom","spare","spare","spare"};
     uint8_t temps[] = {1,1,1,1, 1,1,1,0}, hums[]=  {1,1,1,1, 1,1,1,0}, dbms[]= {1,0,0,0, 0,0,0,0}, press[]={0,0,0,0, 0,0,0,0}, bat[]=   {0,0,0,0, 0,0,0,0};
     uint8_t luxs[] =  {0,1,0,1, 1,0,0,0}, h2os[] = {0,1,0,0, 0,0,0,0}, doors[]={0,0,1,1, 0,0,0,0}, pirs[]={0,1,0,1, 0,0,0,0}, sonics[]={0,0,0,0, 0,0,0,0};
   #endif
 
   #ifdef CASA_2a:
-    #define numberOfPlatforms 3       // number of sensor platforms available  + 1 for HUB
-                                        //const char* location[] = {"hub","basement","bedroom","kitchen","bathroom","spare","spare","spare"};
+    //const char* location[] = {"hub","basement","bedroom","kitchen","bathroom","spare","spare","spare"};
     uint8_t temps[] = {1,1,1,1, 1,1,1,0}, hums[]=  {1,1,1,1, 1,1,1,0}, dbms[]= {1,0,0,0, 0,0,0,0}, press[]={0,0,0,0, 0,0,0,0}, bat[]=   {0,0,0,0, 0,0,0,0};
-    uint8_t luxs[] =  {0,1,1,1, 1,0,0,0}, h2os[] = {0,1,0,0, 0,0,0,0}, doors[]={0,0,0,0, 0,0,0,0}, pirs[]={0,1,0,0, 0,0,0,0}, sonics[]={0,0,0,0, 0,0,0,0};
+    uint8_t luxs[] =  {0,1,1,1, 0,0,0,0}, h2os[] = {0,1,0,0, 0,0,0,0}, doors[]={0,0,0,0, 0,0,0,0}, pirs[]={0,0,0,0, 0,0,0,0}, sonics[]={0,0,0,0, 0,0,0,0};
   #endif  
  
   //*****************                                                                                    //*****************
@@ -304,14 +366,14 @@ NOTES -  1. IF using MELife for ESP32 ESP-32S Development Board, use Arduino IDE
   #ifdef ESP32_
     #define pinBoardLED 2               //onboard LED
     #ifndef d1MiniESP32_
-      #define pinPir 39                 //HC-SR501 PIR sensor       for full esp32    
+      #define pinPir 39                 //HC-SR501 PIR sensor       for full size esp32    
       #define pinPhotoCell 34 
     #endif     
     #ifdef d1MiniESP32_
       #define pinPir 34                 //HC-SR501 PIR sensor     for d1 mini esp32 
       #define pinPhotoCell 33           
     #endif  
-    #define pinSonicEcho 23                                       
+    #define pinSonicEcho 33                                       
     #define pinSonicTrigger 23          
     #define pinDoor 35                  //door wired to magnetic reed switch, NO & C connected 
                                         //  to pinDoor and ground; 1K pullup R to pinDoor & 3.3v
@@ -372,7 +434,7 @@ NOTES -  1. IF using MELife for ESP32 ESP-32S Development Board, use Arduino IDE
 ////////////////////////////////////////////////////////////////////////////
 
   uint64_t uS_TO_S_FACTOR = 1000000;  // Conversion factor for micro seconds to seconds
-  uint8_t wakeupID;                   //reason sensor wode up; see readWakeupID 
+  uint8_t wakeupID;                   //reason sensor woke up; see readWakeupID 
 
   // Platform sensor structure
   // Structure to send data must match the receiver structure:
@@ -421,7 +483,10 @@ NOTES -  1. IF using MELife for ESP32 ESP-32S Development Board, use Arduino IDE
   //*****************
   #ifdef HTTPGET
     #ifdef ESP32_
-      #include <WiFi.h>                  // wifi libr for esp32
+      #ifndef WIFI_H
+        #define WIFI_H
+        #include <WiFi.h>        
+      #endif    
     #endif
     #ifdef ESP8266_
       #include <ESP8266WiFi.h>           // wifi libr for esp8266 if you must
@@ -438,8 +503,11 @@ NOTES -  1. IF using MELife for ESP32 ESP-32S Development Board, use Arduino IDE
   #ifdef ESPNOW_1to1 
     #include <esp_now.h>
     #ifdef ESP32_
-      #include <WiFi.h>                  // wifi libr for esp32
-      #include <esp_wifi.h>
+      #ifndef WIFI_H
+        #define WIFI_H
+        #include <WiFi.h>        
+      #endif    
+    #include <esp_wifi.h>
     #endif
     #ifdef ESP8266_
       #include <ESP8266WiFi.h>                // wifi libr for esp8266
@@ -453,7 +521,10 @@ NOTES -  1. IF using MELife for ESP32 ESP-32S Development Board, use Arduino IDE
   //*****************
   #ifdef ESPNOW_1toN
     #ifdef ESP32_
-      #include <WiFi.h>                  // wifi libr for esp32
+      #ifndef WIFI_H
+        #define WIFI_H
+        #include <WiFi.h>        
+      #endif    
     #endif
     #ifdef ESP8266_
       #include <ESP8266WiFi.h>           // wifi libr for esp8266
@@ -463,6 +534,19 @@ NOTES -  1. IF using MELife for ESP32 ESP-32S Development Board, use Arduino IDE
     esp_now_peer_info_t peerInfo;
   #endif
 
+  //*******************
+  // OTA Libraries
+  //******************
+  
+  #ifdef OTA
+    #ifndef WIFI_H
+      #define WIFI_H
+      #include <WiFi.h>
+    #endif
+    #include <ESPmDNS.h>
+    #include <WiFiUdp.h>
+    #include <ArduinoOTA.h>
+  #endif
   //*******************************   
   // 16. Home Assistant setup
   //*******************************
@@ -472,6 +556,7 @@ NOTES -  1. IF using MELife for ESP32 ESP-32S Development Board, use Arduino IDE
     //#define mqTTMode
     //****************wifi stuff
     #ifndef WIFI_H
+      #define WIFI_H
       #include <WiFi.h>        
     #endif    
     #include "WiFiMulti.h"
@@ -485,42 +570,49 @@ NOTES -  1. IF using MELife for ESP32 ESP-32S Development Board, use Arduino IDE
     
     #ifdef CASA_1
       //garage topics
-      #define BUTTON_TOPIC          "garage/button"
-      #define TEMPERATURE_TOPIC     "garage/temperature"
-      #define HUMIDITY_TOPIC        "garage/humidity"
-      #define PRESSURE_TOPIC        "garage/pressure"
-      #define DOOR_TOPIC            "garage/door"
-      #define DOOR_COUNT_TOPIC      "garage/doorcount"
-      #define PIR_TOPIC             "garage/pir"
-      #define LUX_TOPIC             "garage/lux"
-      #define AH2O_TOPIC            "garage/ah2o"
-      #define DH2O_TOPIC            "garage/dh2o"
-      #define SONIC_TOPIC           "garage/sonic"
-      #define SEND_FAILURES_TOPIC   "garage/sendfailures"
-      #define HATCH_TOPIC           "garage/hatch"
+      #define  GARAGE_BUTTON_TOPIC          "garage/button"
+      #define  GARAGE_TEMPERATURE_TOPIC     "garage/temperature"
+      #define  GARAGE_HUMIDITY_TOPIC        "garage/humidity"
+      #define  GARAGE_PRESSURE_TOPIC        "garage/pressure"
+      #define  GARAGE_DOOR_TOPIC            "garage/door"
+      #define  GARAGE_DOOR_COUNT_TOPIC      "garage/doorcount"
+      #define  GARAGE_PIR_TOPIC             "garage/pir"
+      #define  GARAGE_LUX_TOPIC             "garage/lux"
+      #define  GARAGE_AH2O_TOPIC            "garage/ah2o"
+      #define  GARAGE_DH2O_TOPIC            "garage/dh2o"
+      #define  GARAGE_SEND_FAILURES_TOPIC   "garage/sendfailures"
 
       //hub topics
       #define HUB_TEMPERATURE_TOPIC "hub/temperature"
       #define HUB_HUMIDITY_TOPIC    "hub/humidity"
       #define HUB_PRESSURE_TOPIC    "hub/pressure"
 
+      #define SONIC_TOPIC           "garage/sonic"
+      #define SONIC_SEND_FAILURES_TOPIC   "sonic/sendfailures"
+
+      #define HATCH_TOPIC           "garage/hatch"
+      #define HATCH_SEND_FAILURES_TOPIC   "hatch/sendfailures"
+
       //kitchen topics
       #define KITCHEN_TEMPERATURE_TOPIC     "kitchen/temperature"
       #define KITCHEN_HUMIDITY_TOPIC        "kitchen/humidity"
       #define KITCHEN_PRESSURE_TOPIC        "kitchen/pressure"
       #define KITCHEN_PIR_TOPIC             "kitchen/pir"
-
+      #define KITCHEN_SEND_FAILURES_TOPIC   "kitchen/sendfailures"
+      
       //bathroom topics
       #define BATHROOM_TEMPERATURE_TOPIC     "bathroom/temperature"
       #define BATHROOM_HUMIDITY_TOPIC        "bathroom/humidity"
       #define BATHROOM_PRESSURE_TOPIC        "bathroom/pressure"
       #define BATHROOM_PIR_TOPIC             "bathroom/pir"      
+      #define BATHROOM_SEND_FAILURES_TOPIC   "bathroom/sendfailures"
 
       //bathroom2 topics
       #define BATHROOM2_TEMPERATURE_TOPIC     "bathroom2/temperature"
       #define BATHROOM2_HUMIDITY_TOPIC        "bathroom2/humidity"
       #define BATHROOM2_PRESSURE_TOPIC        "bathroom2/pressure"
       #define BATHROOM2_PIR_TOPIC             "bathroom2/pir"      
+      #define BATHROOM2_SEND_FAILURES_TOPIC   "bathroom2/sendfailures"
     #endif //CASA_1
     
     #ifdef CASA_2
@@ -565,6 +657,12 @@ NOTES -  1. IF using MELife for ESP32 ESP-32S Development Board, use Arduino IDE
       #define BEDROOM_DOOR_COUNT_TOPIC       "2bedroom/doorcount"
       #define BEDROOM_SEND_FAILURES_TOPIC   "2bedroom/sendfailures"
 
+     //bathroom topics
+      #define BATHROOM_TEMPERATURE_TOPIC     "2bathroom/temperature"
+      #define BATHROOM_HUMIDITY_TOPIC        "2bathroom/humidity"
+      //#define BATHROOMa_LUX_TOPIC             "2bathroom/lux"
+      #define BATHROOM_SEND_FAILURES_TOPIC    "2bathroom/sendfailures"
+      //#define BATHROOM_PIR_TOPIC             "2bathroom/pir" 
     #endif //CASA_2
 
     #ifdef CASA_2a
@@ -982,7 +1080,11 @@ void readAh2o(){
     if(aH2oMeasured > 5){
       aH2oMeasured = 5;  
     }
-    sensorData.aH2o = 5 - aH2oMeasured;
+    uint8_t x = 5 - aH2oMeasured;
+    if(abs(x-sensorData.aH2o)>=1){
+      sensorData.aH2o = x;
+      reportFlag = true;
+    }
     #ifdef printMode
       Serial.println(sensorData.aH2o);//Serial.println(F("% "));
     #endif
@@ -1076,7 +1178,13 @@ void readHumidity() {
   #endif
   hum=String(x);
   if (hum == "nan") {hum = "--";
-   }else{sensorData.humidity = x;
+   }else{
+    
+     //update only if >=1 unit change
+    if(abs(x-sensorData.humidity)>=1.0){
+      sensorData.humidity = x;
+      reportFlag=true;
+    }  
   }
   #ifdef printMode
     Serial.print(F("humidity, hum: "));Serial.print(sensorData.humidity);Serial.print(F(", "));Serial.println(hum);
@@ -1090,8 +1198,11 @@ void readPhotoCell(){
     #ifdef printMode
       Serial.print(F("*readPhotoCell* "));
     #endif  
-
-    sensorData.lux = 2.44*((4095-analogRead(pinPhotoCell))/100);  //whole number 1-99 %
+    uint8_t x = 2.44*((4095-analogRead(pinPhotoCell))/100);  //whole number 1-99 %
+    if(abs(sensorData.lux - x)>=1){
+       sensorData.lux = x;
+       reportFlag = true;
+    }
   
     #ifdef printMode
       Serial.print(F("lux%, A/D: "));Serial.print(sensorData.lux); Serial.print(F("% "));
@@ -1133,8 +1244,9 @@ void readSonic(){
     float sensorDistance = ((duration / 2) * 0.0344)/2.54;  //calculate distance in inches
     uint16_t distance = round(sensorDistance+1); //rounding up
     //priorDistance = sensorData.sonic;
-    Serial.printf("\n\nDistance = %d cm\n", distance);  Serial.printf("\n\nPrior Distance = %d cm\n", sensorData.sonic);
-
+    #ifdef printMode
+      Serial.printf("\n\nDistance = %d cm\n", distance);  Serial.printf("\n\nPrior Distance = %d cm\n", sensorData.sonic);
+    #endif
     if (abs(distance-sensorData.sonic)>=6 ) {
       sensorData.sonic=distance;       
       reportFlag = true;
@@ -1158,7 +1270,12 @@ void readPressure(){
     x = bme.readPressure()/100.0;    //millibars
     pres = String(x);
     if (pres == "nan") {pres = "--";
-      }else{sensorData.pressure = x;
+      }else{ 
+      //update only if >=1 unit change
+      if(abs(x-sensorData.pressure)>=1){
+        sensorData.pressure = x;
+        reportFlag=true;
+      }  
     }
   #endif                                                                    
   #ifdef printMode
@@ -1192,7 +1309,12 @@ void readTemperature() {
   #endif
   tem=String(x);
   if (tem=="nan"){tem = "--";
-  }else{sensorData.temperature = x;
+  }else{
+    //update temp only if >=1 degree change
+    if(abs(x-sensorData.temperature)>=1.0){
+      sensorData.temperature = x;
+      reportFlag=true;
+    }  
   }
 
   #ifdef printMode 
@@ -1455,6 +1577,69 @@ void setupOledDisplay(){
 }
 
 //*********************************
+void setupOTA() {
+  #ifdef OTA
+    Serial.begin(115200);
+    Serial.println("*setupOTA*");
+delay(5000);
+    WiFi.mode(WIFI_STA);
+    WiFi.begin(SECRET_WIFI_SSID, SECRET_WIFI_PASSWORD);
+    while (WiFi.waitForConnectResult() != WL_CONNECTED) {
+      Serial.println("Connection Failed! Rebooting...");
+      delay(5000);
+      ESP.restart();
+    }
+  
+    // Port defaults to 3232
+    // ArduinoOTA.setPort(3232);
+  
+    // Hostname defaults to esp3232-[MAC]
+    // ArduinoOTA.setHostname("myesp32");
+  
+    // No authentication by default
+    // ArduinoOTA.setPassword("admin");
+  
+    // Password can be set with it's md5 value as well
+    // MD5(admin) = 21232f297a57a5a743894a0e4a801fc3
+    // ArduinoOTA.setPasswordHash("21232f297a57a5a743894a0e4a801fc3");
+  
+    ArduinoOTA
+      .onStart([]() {
+Serial.println("ArduitoOTA.onStart");
+delay (5000);
+        String type;
+        if (ArduinoOTA.getCommand() == U_FLASH)
+          type = "sketch";
+        else // U_SPIFFS
+          type = "filesystem";
+  
+        // NOTE: if updating SPIFFS this would be the place to unmount SPIFFS using SPIFFS.end()
+        Serial.println("Start updating " + type);
+      })
+      .onEnd([]() {
+        Serial.println("\nEnd");
+      })
+      .onProgress([](unsigned int progress, unsigned int total) {
+        Serial.printf("Progress: %u%%\r", (progress / (total / 100)));
+      })
+      .onError([](ota_error_t error) {
+        Serial.printf("Error[%u]: ", error);
+        if (error == OTA_AUTH_ERROR) Serial.println("Auth Failed");
+        else if (error == OTA_BEGIN_ERROR) Serial.println("Begin Failed");
+        else if (error == OTA_CONNECT_ERROR) Serial.println("Connect Failed");
+        else if (error == OTA_RECEIVE_ERROR) Serial.println("Receive Failed");
+        else if (error == OTA_END_ERROR) Serial.println("End Failed");
+      });
+  
+    ArduinoOTA.begin();
+  
+    Serial.println("Ready");
+    Serial.print("IP address: ");
+    Serial.println(WiFi.localIP());
+  #endif
+}
+
+//*********************************
 void setupPinModes(){                
   //Set Pin Modes INPUT / OUTPUT / PULLUP
   #ifdef printMode
@@ -1565,7 +1750,7 @@ void setupWakeupConditions(){
     esp_sleep_enable_ext1_wakeup(wakeupBitmask,ESP_EXT1_WAKEUP_ANY_HIGH);
   }  
 }      
-  #define ESP32_           //Recommended choice is esp32
+//  #define ESP32_           //Recommended choice is esp32
   //#define d1MiniESP32_
 //*************************************
 void setupWifiServer(){
@@ -1645,7 +1830,8 @@ void turnOffBoardLED(){
   #ifdef ESP32_
     digitalWrite(pinBoardLED, LOW);
   #endif 
-}    
+}
+
 //HA stuff:
 //************************************************************WiFi Stuff
 void setupWifi(){
@@ -1785,29 +1971,30 @@ void publishMQTT(uint8_t i){
     #ifdef CASA_1
       switch (i){
         case 0:      
-          //mqttClient.publish(strcat(location[1],TEMPERATURE_TOPIC), 0, false, (String(sensorData.temperature)).c_str());
-          mqttClient.publish(TEMPERATURE_TOPIC, 0, false, (String(sensorData.temperature)).c_str());
-          mqttClient.publish(HUMIDITY_TOPIC, 0, false, (String(sensorData.humidity)).c_str());
-          mqttClient.publish(PRESSURE_TOPIC, 0, false, (String(sensorData.pressure)).c_str()); 
+          mqttClient.publish(HUB_TEMPERATURE_TOPIC, 0, false, (String(sensorData.temperature)).c_str());
+          mqttClient.publish(HUB_HUMIDITY_TOPIC, 0, false, (String(sensorData.humidity)).c_str());
+          mqttClient.publish(HUB_PRESSURE_TOPIC, 0, false, (String(sensorData.pressure)).c_str()); 
         break;
         case 1:
-          mqttClient.publish(DOOR_TOPIC, 0, false, (String(sensorData.door)).c_str());
-          mqttClient.publish(DOOR_COUNT_TOPIC, 0, false, (String(sensorData.doorCount)).c_str());
-          mqttClient.publish(PIR_TOPIC, 0, false, (String(sensorData.pir)).c_str()); 
-          mqttClient.publish(LUX_TOPIC, 0, false, (String(sensorData.lux)).c_str());  
-          mqttClient.publish(AH2O_TOPIC, 0, false, (String(sensorData.aH2o)).c_str());  
-          mqttClient.publish(DH2O_TOPIC, 0, false, (String(sensorData.dH2o)).c_str());   
+          mqttClient.publish(GARAGE_TEMPERATURE_TOPIC, 0, false, (String(sensorData.temperature)).c_str());
+          mqttClient.publish(GARAGE_HUMIDITY_TOPIC, 0, false, (String(sensorData.humidity)).c_str());
+          mqttClient.publish(GARAGE_PRESSURE_TOPIC, 0, false, (String(sensorData.pressure)).c_str()); 
+          mqttClient.publish(GARAGE_DOOR_TOPIC, 0, false, (String(sensorData.door)).c_str());
+          mqttClient.publish(GARAGE_DOOR_COUNT_TOPIC, 0, false, (String(sensorData.doorCount)).c_str());
+          mqttClient.publish(GARAGE_PIR_TOPIC, 0, false, (String(sensorData.pir)).c_str()); 
+          mqttClient.publish(GARAGE_LUX_TOPIC, 0, false, (String(sensorData.lux)).c_str());  
+          mqttClient.publish(GARAGE_AH2O_TOPIC, 0, false, (String(sensorData.aH2o)).c_str());  
+          mqttClient.publish(GARAGE_DH2O_TOPIC, 0, false, (String(sensorData.dH2o)).c_str());   
        
-          mqttClient.publish(SEND_FAILURES_TOPIC, 0, false, (String(sensorData.sendFailures)).c_str()); 
+          mqttClient.publish(GARAGE_SEND_FAILURES_TOPIC, 0, false, (String(sensorData.sendFailures)).c_str()); 
         break;
         case 2:
           mqttClient.publish(SONIC_TOPIC, 0, false, (String(sensorData.sonic)).c_str());    
-          mqttClient.publish(HATCH_TOPIC, 0, false, (String(sensorData.door)).c_str());
-        break;
+          mqttClient.publish(SONIC_SEND_FAILURES_TOPIC, 0, false, (String(sensorData.sendFailures)).c_str()); 
+         break;
         case 3:
-          mqttClient.publish(HUB_TEMPERATURE_TOPIC, 0, false, (String(sensorData.temperature)).c_str());
-          mqttClient.publish(HUB_HUMIDITY_TOPIC, 0, false, (String(sensorData.humidity)).c_str());
-          mqttClient.publish(HUB_PRESSURE_TOPIC, 0, false, (String(sensorData.pressure)).c_str());
+          mqttClient.publish(HATCH_TOPIC, 0, false, (String(sensorData.door)).c_str());
+          mqttClient.publish(HATCH_SEND_FAILURES_TOPIC, 0, false, (String(sensorData.sendFailures)).c_str());           
         break;
         case 4:
           //kitchen topis
@@ -1815,6 +2002,7 @@ void publishMQTT(uint8_t i){
           mqttClient.publish( KITCHEN_HUMIDITY_TOPIC, 0, false, (String(sensorData.humidity)).c_str());
           mqttClient.publish(KITCHEN_PRESSURE_TOPIC, 0, false, (String(sensorData.pressure)).c_str());
           mqttClient.publish(KITCHEN_PIR_TOPIC, 0, false, (String(sensorData.pir)).c_str());
+          mqttClient.publish(KITCHEN_SEND_FAILURES_TOPIC, 0, false, (String(sensorData.sendFailures)).c_str()); 
         break;
         case 5:
           //bathroom topics
@@ -1822,6 +2010,7 @@ void publishMQTT(uint8_t i){
           mqttClient.publish(BATHROOM_HUMIDITY_TOPIC, 0, false, (String(sensorData.humidity)).c_str());
           mqttClient.publish(BATHROOM_PRESSURE_TOPIC, 0, false, (String(sensorData.pressure)).c_str());
           mqttClient.publish(BATHROOM_PIR_TOPIC, 0, false, (String(sensorData.pir)).c_str());
+          mqttClient.publish(BATHROOM_SEND_FAILURES_TOPIC, 0, false, (String(sensorData.sendFailures)).c_str()); 
         break;
         case 6:
           //bathroom2 topics
@@ -1829,6 +2018,7 @@ void publishMQTT(uint8_t i){
           mqttClient.publish(BATHROOM2_HUMIDITY_TOPIC, 0, false, (String(sensorData.humidity)).c_str());
           mqttClient.publish(BATHROOM2_PRESSURE_TOPIC, 0, false, (String(sensorData.pressure)).c_str());
           mqttClient.publish(BATHROOM2_PIR_TOPIC, 0, false, (String(sensorData.pir)).c_str());
+          mqttClient.publish(BATHROOM2_SEND_FAILURES_TOPIC, 0, false, (String(sensorData.sendFailures)).c_str()); 
         break;
       }
       //sensorData.doorCount=0;
@@ -1887,7 +2077,14 @@ void publishMQTT(uint8_t i){
           mqttClient.publish(KITCHEN_LUX_TOPIC, 0, false, (String(sensorData.lux)).c_str());
           mqttClient.publish(KITCHEN_SEND_FAILURES_TOPIC, 0, false, (String(sensorData.sendFailures)).c_str()); 
         break;
+        case 4:
 
+        //bathroom topics
+        mqttClient.publish(BATHROOM_TEMPERATURE_TOPIC, 0, false, (String(sensorData.temperature)).c_str());
+        mqttClient.publish(BATHROOM_HUMIDITY_TOPIC, 0, false, (String(sensorData.humidity)).c_str());
+        //mqttClient.publish(BATHROOM_LUX_TOPIC, 0, false, (String(sensorData.lux)).c_str());
+        mqttClient.publish(BATHROOM_SEND_FAILURES_TOPIC, 0, false, (String(sensorData.sendFailures)).c_str()); 
+      break;
       }
 
       //sensorData.doorCount=0;
@@ -2011,6 +2208,10 @@ void onMqttMessage(char* topic, char* payload, AsyncMqttClientMessageProperties 
 void setup(){
   //Read sensors, 1) setup wifi server OR 2) transmit data using ESPNOW and go to sleep in less than 2 sec!
   delay(200);                   //ESP32 Bug workaround -- don't reference rtc ram too soon!!
+ #ifdef OTA
+    ArduinoOTA.setHostname(ssid);
+    setupOTA();
+  #endif  
   setupPinModes();
   wakeupID = readWakeupID();    //process wakeup sources & return wakeup indicator
   serialPrintVersion();         //Show version and startup/wakeup info to serial monitor if printMode enabled
@@ -2039,7 +2240,7 @@ void setup(){
   setupESPNOW_1toN();           //format data and send espnow msg to multiple peers if #define ESPNOW_1toN is enabled; 
                                 //will NOT cause system to go to sleep if sleepSeconds>0 and data was received successfully
 
-  setupWifiServer();            //initialize wifi server if #define WIFI is enabled
+  setupWifiServer();            //initialize wifi server if #define HTTPGET is enabled
 
   turnOffBoardLED();            //turn off the board LED when setup complete
 }
@@ -2048,6 +2249,9 @@ void setup(){
 //*****      Loop()      *********** 
 /////////////////////////////////
 void loop(){                  //Execute repeatedly if system did not go to sleep during setup:
+  #ifdef OTA
+    ArduinoOTA.handle();
+  #endif  
   readDoor();
   //readPir();                //read pir status via wakeup rather than polling
   readAh2o();
@@ -2078,12 +2282,13 @@ void loop(){                  //Execute repeatedly if system did not go to sleep
         ESP.deepSleep(sleepSeconds * uS_TO_S_FACTOR);   //go to sleep for sleepSeconds 
       }
     }
-    reportFlag=true;          //resend sensor data every chillSeconds even if no change; 
+    //REJ 2/2/24 this causes too many reports (sonic example)
+    //reportFlag=true;          //resend sensor data every chillSeconds even if no change; 
                               //send in main loop in case multiple tries are necessary.
     printSensorData();
   }
   if (reportFlag){            //Send data each time it changes as indicated by reportFlag
- //   publishMQTT(sensorID);    // publish to HA if enabled
+    publishMQTT(sensorID);    // publish to HA if enabled
     sendEspNow_1to1();        //format data and send espnow msg to a single peer if #define ESPNOW_1to1 is enabled; 
                               //successful data transfer will cause the system to sleep if sleepSeconds > 0                                
 

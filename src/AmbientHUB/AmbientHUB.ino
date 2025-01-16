@@ -1,7 +1,11 @@
 
 const char* APP = "AmbientHUB ";
-const char* VERSION = "2023 v1011";
+const char* VERSION = "2023 v1101";
 
+/* 
+ *  set up FL Casa 1 for HA
+ *  
+ */
 /////////////////////////////////////////////////////////////////////////////////////
 //
 // AmbientHUB is a sensor HUB which collects data from up to seven sensor platforms and submits reports via cellular connection.
@@ -78,7 +82,7 @@ const char* VERSION = "2023 v1011";
                               // sensor values to multiple gmail accounts and to google sheets.
   #define adaMQTT             // enables use of adafruit mqtt publish; get a free account at www.adafruit.io, then 
                               // use this account to access ifttt for a more reliable experience than ifttt direct.
-  //#define HA                  // Enable ommunication with Home Assistant for enhanced real time sensor updates and monitoring via local wifi.
+  #define HA                  // Enable ommunication with Home Assistant for enhanced real time sensor updates and monitoring via local wifi.
   //#define TELEGRAM          // Enable telegram if you pass comands to ESP32 via WIFI (for exxample, to close the garage door from away)
   #define dweetMode           // enables use of dweet as a backup to ifttt and adafruit.  www.Dweet.com is free.  The cellular SIM imei is used as a key to
                               // log and monitor sensor values.
@@ -95,10 +99,10 @@ const char* VERSION = "2023 v1011";
   //*****************************
   // 2. Select one CASA (reporting site which may have unique configuration):
   //*****************************
-  //#define CASA_1            // Site #1
-  //#define CASA_1a
- // #define CASA_2              // Site #2 LillyGo2
-  #define CASA_2a           // Site# 2, unit a Botletics
+//  #define CASA_1            // Site #1 FL LillyGo
+  //#define CASA_1a           // Site# 1a FL Botletics
+  #define CASA_2            // Site #2 ME LillyGo2
+//  #define CASA_2a           // Site# 2a ME Botletics
 
   #ifdef CASA_1
     char dataTag[] = "FL";   // <<< unique prefix to identify source of data >
@@ -117,9 +121,9 @@ const char* VERSION = "2023 v1011";
     //*****************
     // Timing Parameters
     //***************** 
-    const int espSleepSeconds = 48*60;     // or 0; heartbeat period OR wakes up out of sleepMode after sleepMinutes           
+    const int espSleepSeconds = 0; //48*60;     // or 0; heartbeat period OR wakes up out of sleepMode after sleepMinutes           
     const long espAwakeSeconds = 12*60;    // interval in seconds to stay awake as HUB; you dont need to change this if espSleepSeconds = 0 indicating no sleep
-    int heartbeatMinutes = 10;             // (default 10) heartbeat delay after HUB awakens.  this needs to be at least 2 minutes less than espAwakeSeconds
+    int heartbeatMinutes = 60; //10;             // (default 10) heartbeat delay after HUB awakens.  this needs to be at least 2 minutes less than espAwakeSeconds
                                            // IF espSleepSeconds - 0, then this is the heartbeat frequency.
     const long chillSeconds = 10;          // (not used)interval between readings if sleepSeconds = 0 slows serial monitor updates
     const long sensorSeconds = 1*60;        // interval in seconds to refresh time sensitive sensor readings 
@@ -139,8 +143,8 @@ const char* VERSION = "2023 v1011";
     //*****************
     // Temperature sensor 
     //****************
-    #define AHT10_    // Adafruit AHT10  <--GARAGE
-    //#define BME_        // BME280 temperature, humidity, pressure sensor
+    //#define AHT10_    // Adafruit AHT10  <--GARAGE
+    #define BME_        // BME280 temperature, humidity, pressure sensor
     //#define DHT_      // DHT11,21,22, etc. temperature, humidity sensors
     //#define MCP9808_  // botletics shield temperature sensor
     //#define SHT20_    // DFRobot SHT20
@@ -157,7 +161,7 @@ const char* VERSION = "2023 v1011";
     //#define HTTPGET   // A slower system by which the HUB polls the sensor via http GET request to pull data; WIFI is a memory hog.
 
     #ifdef cellularMode
-      #define simSleepMode        // shut off sim modem between readings 
+      //#define simSleepMode        // shut off sim modem between readings 
     #endif
     
 //  #define alertMode           //  enables postAlert when a measurement crosses threshhold; // = no alert
@@ -167,17 +171,17 @@ const char* VERSION = "2023 v1011";
     // Timing Parameters
     //*****************
     
-    const int espSleepSeconds = 48*60;     // or 0; heartbeat period OR wakes up out of sleepMode after sleepMinutes           
+    const int espSleepSeconds = 0; //48*60;     // or 0; heartbeat period OR wakes up out of sleepMode after sleepMinutes           
     const long espAwakeSeconds = 12*60;    // interval in seconds to stay awake as HUB; you dont need to change this if espSleepSeconds = 0 indicating no sleep
-    int heartbeatMinutes =  10;           // (default 10)  heartbeat delay after HUB awakens.  this needs to be at least 2 minutes less than espAwakeSeconds
+    int heartbeatMinutes = 60; // 10;           // (default 10)  heartbeat delay after HUB awakens.  this needs to be at least 2 minutes less than espAwakeSeconds
                                            // IF espSleepSeconds = 0, then this is the time between scheduled reports over the cellular network
-    const long chillSeconds = 2;          // interval between readings if sleepSeconds = 0 slows serial monitor updates
-    const long sensorSeconds = 15*60;        // interval in seconds to refresh time sensitive sensor readings 
+    const long chillSeconds = 10;          // interval between readings if sleepSeconds = 0 slows serial monitor updates
+    const long sensorSeconds = 1*60; //15*60;        // interval in seconds to refresh time sensitive sensor readings 
   
-    const long serialMonitorSeconds = 1*60; // (growth) interval in seconds to refresh serial monitor sensor readings (enhances readability)            
+    const long serialMonitorSeconds = 5*60; //1*60; // (growth) interval in seconds to refresh serial monitor sensor readings (enhances readability)            
     const long samplingRateSeconds = 10;    // (growth) interval in seconds between sensor readings in alertMode
   
-    #define bootResetCount 24         //reset ESP once per day
+    #define bootResetCount 24         //reset ESP once per day (24 wakeups)
 
     //*****************
     // Temperature sensor 
@@ -201,7 +205,7 @@ const char* VERSION = "2023 v1011";
     //#define HTTPGET   // A slower system by which the HUB polls the sensor via http GET request to pull data; WIFI is a memory hog.
 
     #ifdef cellularMode
-    #define simSleepMode        // shut off sim modem between readings 
+    //#define simSleepMode        // shut off sim modem between readings 
     #endif
     
 //  #define alertMode           //  enables postAlert when a measurement crosses threshhold; // = no alert
@@ -211,17 +215,17 @@ const char* VERSION = "2023 v1011";
     // Timing Parameters
     //*****************
     
-    const int espSleepSeconds = 48*60;     // or 0; heartbeat period OR wakes up out of sleepMode after sleepMinutes           
+    const int espSleepSeconds = 0; //48*60;     // or 0; heartbeat period OR wakes up out of sleepMode after sleepMinutes           
     const long espAwakeSeconds = 12*60;    // interval in seconds to stay awake as HUB; you dont need to change this if espSleepSeconds = 0 indicating no sleep
-    int heartbeatMinutes =  10;           // 10 heartbeat delay after HUB awakens.  this needs to be at least 2 minutes less than espAwakeSeconds
+    int heartbeatMinutes =  60;//10;           // 10 heartbeat delay after HUB awakens.  this needs to be at least 2 minutes less than espAwakeSeconds
                                            // IF espSleepSeconds = 0, then this is the time between scheduled reports over the cellular network
     const long chillSeconds = 10;          //interval between readings if sleepSeconds = 0 slows serial monitor updates
-    const long sensorSeconds = 15*60;        // interval in seconds to refresh time sensitive sensor readings 
+    const long sensorSeconds = 1*60; //15*60;        // interval in seconds to refresh time sensitive sensor readings 
   
     const long serialMonitorSeconds = 5*60; // (growth) interval in seconds to refresh serial monitor sensor readings (enhances readability)            
     const long samplingRateSeconds = 10;    // (growth) interval in seconds between sensor readings in alertMode
   
-    #define bootResetCount 24         //reset ESP once per day
+    #define bootResetCount 24         //reset ESP once per day (24 wakeups)
 
     //*****************
     // Temperature sensor 
@@ -248,22 +252,22 @@ const char* VERSION = "2023 v1011";
     #define numberOfPlatforms 7         // number of sensor platforms available  + 1 for HUB
                                         // example: if hub has sensors, and there are 3 wireless platforms, numberOfPlatforms = 4
                                         //const char* location[] = {"hub","garage","sonic","hatch", "kitchen","bathroom","bathroom2,"spare"};
-    uint8_t temps[] = {1,1,0,0, 1,1,1,0}, hums[]=  {1,1,0,0, 1,1,1,0}, dbms[]= {1,0,0,0, 0,0,0,0}, pres[]={1,0,0,0, 0,1,0,0}, bat[]=   {0,0,0,0, 0,0,0,0};
-    uint8_t luxs[] =  {0,1,0,0, 1,0,0,0}, h2os[] = {0,0,0,0, 0,0,0,0}, doors[]={0,1,0,0, 1,0,0,0}, pirs[]={0,1,0,0, 1,1,1,0}, sonics[]={0,0,1,0, 0,0,0,0};
+    uint8_t temps[] = {1,1,0,0, 1,1,1,0}, hums[]=  {1,1,0,0, 1,1,1,0}, dbms[]= {1,0,0,0, 0,0,0,0}, pres[]={1,0,0,0, 0,0,0,0}, bat[]=   {0,0,0,0, 0,0,0,0};
+    uint8_t luxs[] =  {0,1,0,0, 0,0,0,0}, h2os[] = {0,0,0,0, 0,0,0,0}, doors[]={0,1,0,1, 0,0,0,0}, pirs[]={0,1,0,0, 1,1,1,0}, sonics[]={0,0,1,0, 0,0,0,0};
   #endif
   
   #ifdef CASA_2
-    #define numberOfPlatforms 4         // number of sensor platforms available  + 1 for HUB
+    #define numberOfPlatforms 5         // number of sensor platforms available  + 1 for HUB
                                         // example: if hub has sensors, and there are 3 wireless platforms, numberOfPlatforms = 4
                                         //const char* location[] = {"hub","basement","bedroom","kitchen","bathroom","spare","spare","spare"};
     uint8_t temps[] = {1,1,1,1, 1,1,1,0}, hums[]=  {1,1,1,1, 1,1,1,0}, dbms[]= {1,0,0,0, 0,0,0,0}, pres[]={0,0,0,0, 0,0,0,0}, bat[]=   {0,0,0,0, 0,0,0,0};
-    uint8_t luxs[] =  {0,1,0,1, 1,0,0,0}, h2os[] = {0,1,0,0, 0,0,0,0}, doors[]={0,0,1,1, 0,0,0,0}, pirs[]={0,1,0,1, 0,0,0,0}, sonics[]={0,0,0,0, 0,0,0,0};
+    uint8_t luxs[] =  {0,1,0,1, 0,0,0,0}, h2os[] = {0,1,0,0, 0,0,0,0}, doors[]={0,0,1,1, 0,0,0,0}, pirs[]={0,1,0,1, 0,0,0,0}, sonics[]={0,0,0,0, 0,0,0,0};
   #endif
   #ifdef CASA_2a
     #define numberOfPlatforms 3         // number of sensor platforms available  + 1 for HUB
                                         // example: if hub has sensors, and there are 3 wireless platforms, numberOfPlatforms = 4
                                         //const char* location[] = {"hub","basement","bedroom","kitchen","bathroom","spare","spare","spare"};
-    uint8_t temps[] = {1,1,1,1, 1,1,1,0}, hums[]=  {1,1,1,1, 1,1,1,0}, dbms[]= {1,0,0,0, 0,0,0,0}, pres[]={0,0,0,0, 0,0,0,0}, bat[]=   {0,0,0,0, 0,0,0,0};
+    uint8_t temps[] = {1,1,1,0, 0,0,0,0}, hums[]=  {1,1,1,0, 0,0,0,0}, dbms[]= {1,0,0,0, 0,0,0,0}, pres[]={0,0,0,0, 0,0,0,0}, bat[]=   {0,0,0,0, 0,0,0,0};
     uint8_t luxs[] =  {0,1,1,1, 1,0,0,0}, h2os[] = {0,1,0,0, 0,0,0,0}, doors[]={0,0,0,0, 0,0,0,0}, pirs[]={0,0,0,0, 0,0,0,0}, sonics[]={0,0,0,0, 0,0,0,0};
   #endif
   
@@ -337,24 +341,24 @@ const char* VERSION = "2023 v1011";
     int tempHighThreshReset[numberOfPlatforms];
     int tempLowThreshReset [numberOfPlatforms];
 
-    RTC_DATA_ATTR int luxReportedLow[]={1,1,1,1,1,1,1,1};            
-    RTC_DATA_ATTR int luxReportedHigh[]={0,0,0,0,0,0,0,0};
+    RTC_DATA_ATTR int luxReportedLow[]={1,1,1,1, 1,1,1,1};            
+    RTC_DATA_ATTR int luxReportedHigh[]={0,0,0,0, 0,0,0,0};
     int luxReportedHighReset[numberOfPlatforms];
     int luxReportedLowReset[numberOfPlatforms];
     
-    RTC_DATA_ATTR int h2oReportedLow[]={1,1,1,1,1,1,1,1};
-    RTC_DATA_ATTR int h2oReportedHigh[]={0,0,0,0,0,0,0,0};
+    RTC_DATA_ATTR int h2oReportedLow[]={1,1,1,1, 1,1,1,1};
+    RTC_DATA_ATTR int h2oReportedHigh[]={0,0,0,0, 0,0,0,0};
     int h2oReportedHighReset[numberOfPlatforms];
     int h2oReportedLowReset[numberOfPlatforms];
     
     
-    RTC_DATA_ATTR int doorReportedLow[]={1,1,1,1,1,1,1,1};
-    RTC_DATA_ATTR int doorReportedHigh[]={0,0,0,0,0,0,0,0};
+    RTC_DATA_ATTR int doorReportedLow[]={1,1,1,1, 1,1,1,1};
+    RTC_DATA_ATTR int doorReportedHigh[]={0,0,0,0, 0,0,0,0};
     int doorReportedHighReset[numberOfPlatforms];
     int doorReportedLowReset[numberOfPlatforms];
 
-    RTC_DATA_ATTR int pirReportedLow[]={1,1,1,1,1,1,1,1};
-    RTC_DATA_ATTR int pirReportedHigh[]={0,0,0,0,0,0,0,0};
+    RTC_DATA_ATTR int pirReportedLow[]={1,1,1,1, 1,1,1,1};
+    RTC_DATA_ATTR int pirReportedHigh[]={0,0,0,0, 0,0,0,0};
     int pirReportedHighReset[numberOfPlatforms];
     int pirReportedLowReset[numberOfPlatforms];   
 
@@ -611,49 +615,58 @@ const char* VERSION = "2023 v1011";
     
     #ifdef CASA_1
       //garage topics
-      #define BUTTON_TOPIC          "garage/button"
-      #define TEMPERATURE_TOPIC     "garage/temperature"
-      #define HUMIDITY_TOPIC        "garage/humidity"
-      #define PRESSURE_TOPIC        "garage/pressure"
-      #define DOOR_TOPIC            "garage/door"
-      #define DOOR_COUNT_TOPIC      "garage/doorcount"
-      #define PIR_TOPIC             "garage/pir"
-      #define LUX_TOPIC             "garage/lux"
-      #define AH2O_TOPIC            "garage/ah2o"
-      #define DH2O_TOPIC            "garage/dh2o"
+      //#define BUTTON_TOPIC          "garage/button"
+      
+      #define GARAGE_TEMPERATURE_TOPIC     "garage/temperature"
+      #define GARAGE_HUMIDITY_TOPIC        "garage/humidity"
+      #define GARAGE_PRESSURE_TOPIC        "garage/pressure"
+      #define GARAGE_DOOR_TOPIC            "garage/door"
+      #define GARAGE_DOOR_COUNT_TOPIC      "garage/doorcount"
+      #define GARAGE_PIR_TOPIC             "garage/pir"
+      #define GARAGE_LUX_TOPIC             "garage/lux"
+      #define GARAGE_AH2O_TOPIC            "garage/ah2o"
+      #define GARAGE_DH2O_TOPIC            "garage/dh2o"
+      #define GARAGE_SEND_FAILURES_TOPIC   "garage/sendfailures"
+
       #define SONIC_TOPIC           "garage/sonic"
-      #define SEND_FAILURES_TOPIC   "garage/sendfailures"
+      #define SONIC_SEND_FAILURES_TOPIC   "sonic/sendfailures"
+
       #define HATCH_TOPIC           "garage/hatch"
+      #define HATCH_SEND_FAILURES_TOPIC   "hatch/sendfailures"
 
       //hub topics
       #define HUB_TEMPERATURE_TOPIC "hub/temperature"
       #define HUB_HUMIDITY_TOPIC    "hub/humidity"
       #define HUB_PRESSURE_TOPIC    "hub/pressure"
+      #define HUB_SEND_FAILURES_TOPIC "hub/sendfailures"
 
       //kitchen topics
       #define KITCHEN_TEMPERATURE_TOPIC     "kitchen/temperature"
       #define KITCHEN_HUMIDITY_TOPIC        "kitchen/humidity"
       #define KITCHEN_PRESSURE_TOPIC        "kitchen/pressure"
       #define KITCHEN_PIR_TOPIC             "kitchen/pir"
+      #define KITCHEN_SEND_FAILURES_TOPIC   "kitchen/sendfailures"
 
       //bathroom topics
       #define BATHROOM_TEMPERATURE_TOPIC     "bathroom/temperature"
       #define BATHROOM_HUMIDITY_TOPIC        "bathroom/humidity"
       #define BATHROOM_PRESSURE_TOPIC        "bathroom/pressure"
       #define BATHROOM_PIR_TOPIC             "bathroom/pir"      
+      #define BATHROOM_SEND_FAILURES_TOPIC   "bathroom/sendfailures"
 
       //bathroom2 topics
       #define BATHROOM2_TEMPERATURE_TOPIC     "bathroom2/temperature"
       #define BATHROOM2_HUMIDITY_TOPIC        "bathroom2/humidity"
       #define BATHROOM2_PRESSURE_TOPIC        "bathroom2/pressure"
       #define BATHROOM2_PIR_TOPIC             "bathroom2/pir"      
+      #define BATHROOM2_SEND_FAILURES_TOPIC   "bathroom2/sendfailures"
     #endif //CASA_1
     
     #ifdef CASA_2
       //hub topics
       #define HUB_TEMPERATURE_TOPIC "2hub/temperature"
       #define HUB_HUMIDITY_TOPIC    "2hub/humidity"
-     //#define HUB_PRESSURE_TOPIC    "2hub/pressure"
+      #define HUB_PRESSURE_TOPIC    "2hub/pressure"
       #define HUB_SEND_FAILURES_TOPIC "2hub/sendfailures"
            
      //basement topics
@@ -690,6 +703,13 @@ const char* VERSION = "2023 v1011";
       #define BEDROOM_DOOR_TOPIC            "2bedroom/door"
       #define BEDROOM_DOOR_COUNT_TOPIC       "2bedroom/doorcount"
       #define BEDROOM_SEND_FAILURES_TOPIC   "2bedroom/sendfailures"
+
+      //bathroom topics
+      #define BATHROOM_TEMPERATURE_TOPIC     "2bathroom/temperature"
+      #define BATHROOM_HUMIDITY_TOPIC        "2bathroom/humidity"
+      //#define BATHROOM_LUX_TOPIC             "2bathroom/lux"
+      #define BATHROOM_SEND_FAILURES_TOPIC    "2bathroom/sendfailures"
+      //#define BATHROOM_PIR_TOPIC             "2bathroom/pir"   
 
     #endif //CASA_2
 
@@ -1178,8 +1198,11 @@ void formatData(){
   char comma[2]={':',0};  
   strcpy (buf,dataTag); //lead with unique HUB data stream identifier
 
-//  strcat (buf,prefix);    //Add prefix (identifier if the location being reported)
-//  strcat(buf,prelude);    //Alert hightlight such as GAR OPEN or blank
+  int len = strlen(prelude);
+  if(len>0){
+    strcat (buf,prefix);    //Add prefix (identifier if the location being reported)
+    strcat(buf,prelude);    //Alert hightlight such as GAR OPEN or blank
+  }
    
   //process temperature
   strcpy(separator,prefix);  //separator used between groups of similar data  
@@ -1560,14 +1583,14 @@ int8_t postSensorData(){       //upload sensor data to  adaFruit, dweet.io or IF
   delay(1000);
   #ifdef adaMQTT
     retn = MQTT_connect();
-    /*
+    
       float temp = platform[0].temperature;
       dtostrf(temp, 1, 2, buf2);
       MQTT_publish_checkSuccess(feed_temp, buf2);
       float hum = platform[0].humidity;
       dtostrf(hum, 1, 2, buf2);
-      MQTT_publish_checkSuccess(feed_hum, buf2);
-    */  
+      retn = MQTT_publish_checkSuccess(feed_hum, buf2);
+      
       retn = MQTT_publish_checkSuccess(feed_csv, buf);
 //
     #ifdef adaMQTT_Subscribe  //NEEDS WORK!
@@ -3103,43 +3126,42 @@ void onMqttConnect(bool sessionPresent) {
 void publishMQTT(uint8_t i){
   #ifdef HA
     #ifdef printMode
-      //Serial.print(F("*publishMQTT* (HA) "));Serial.println(i);
+      Serial.print(F("*publishMQTT* (HA) "));Serial.println(i);
     #endif
     #ifdef CASA_1
-    
- 
       switch (i){
         case 0:      
           //mqttClient.publish(strcat(location[1],TEMPERATURE_TOPIC), 0, false, (String(platform[1].temperature)).c_str());
-          mqttClient.publish(TEMPERATURE_TOPIC, 0, false, (String(platform[1].temperature)).c_str());
-          mqttClient.publish(HUMIDITY_TOPIC, 0, false, (String(platform[1].humidity)).c_str());
-          mqttClient.publish(PRESSURE_TOPIC, 0, false, (String(platform[1].pressure)).c_str()); 
-        break;
-        case 1:
-          mqttClient.publish(DOOR_TOPIC, 0, false, (String(platform[1].door)).c_str());
-          mqttClient.publish(DOOR_COUNT_TOPIC, 0, false, (String(platform[1].doorCount)).c_str());
-          mqttClient.publish(PIR_TOPIC, 0, false, (String(platform[1].pir)).c_str()); 
-          mqttClient.publish(LUX_TOPIC, 0, false, (String(platform[1].lux)).c_str());  
-          mqttClient.publish(AH2O_TOPIC, 0, false, (String(platform[1].aH2o)).c_str());  
-          mqttClient.publish(DH2O_TOPIC, 0, false, (String(platform[1].dH2o)).c_str());   
-       
-          mqttClient.publish(SEND_FAILURES_TOPIC, 0, false, (String(platform[1].sendFailures)).c_str()); 
-        break;
-        case 2:
-          mqttClient.publish(SONIC_TOPIC, 0, false, (String(platform[2].sonic)).c_str());    
-          mqttClient.publish(HATCH_TOPIC, 0, false, (String(platform[3].door)).c_str());
-        break;
-        case 3:
           mqttClient.publish(HUB_TEMPERATURE_TOPIC, 0, false, (String(platform[0].temperature)).c_str());
           mqttClient.publish(HUB_HUMIDITY_TOPIC, 0, false, (String(platform[0].humidity)).c_str());
-          mqttClient.publish(HUB_PRESSURE_TOPIC, 0, false, (String(platform[0].pressure)).c_str());
+          mqttClient.publish(HUB_PRESSURE_TOPIC, 0, false, (String(platform[0].pressure)).c_str()); 
+          mqttClient.publish(HUB_SEND_FAILURES_TOPIC, 0, false, (String(platform[0].sendFailures)).c_str()); 
         break;
+        case 1:
+          mqttClient.publish(GARAGE_DOOR_TOPIC, 0, false, (String(platform[1].door)).c_str());
+          mqttClient.publish(GARAGE_DOOR_COUNT_TOPIC, 0, false, (String(platform[1].doorCount)).c_str());
+          //Serial.print(GARAGE_PIR_TOPIC);Serial.print("   -   "); Serial.println(String(platform[1].pir).c_str());
+          mqttClient.publish(GARAGE_PIR_TOPIC, 0, false, (String(platform[1].pir)).c_str()); 
+          mqttClient.publish(GARAGE_LUX_TOPIC, 0, false, (String(platform[1].lux)).c_str());  
+          mqttClient.publish(GARAGE_AH2O_TOPIC, 0, false, (String(platform[1].aH2o)).c_str());  
+          mqttClient.publish(GARAGE_DH2O_TOPIC, 0, false, (String(platform[1].dH2o)).c_str());          
+          mqttClient.publish(GARAGE_SEND_FAILURES_TOPIC, 0, false, (String(platform[1].sendFailures)).c_str()); 
+        break;
+        case 2:
+          mqttClient.publish(SONIC_TOPIC, 0, false, (String(platform[2].sonic)).c_str());   
+          mqttClient.publish(SONIC_SEND_FAILURES_TOPIC, 0, false, (String(platform[2].sendFailures)).c_str()); 
+        break;
+        case 3:           
+          mqttClient.publish(HATCH_TOPIC, 0, false, (String(platform[3].door)).c_str());
+          mqttClient.publish(HATCH_SEND_FAILURES_TOPIC, 0, false, (String(platform[3].sendFailures)).c_str()); 
+       break;
         case 4:
           //kitchen topis
           mqttClient.publish(KITCHEN_TEMPERATURE_TOPIC, 0, false, (String(platform[4].temperature)).c_str());
           mqttClient.publish( KITCHEN_HUMIDITY_TOPIC, 0, false, (String(platform[4].humidity)).c_str());
           mqttClient.publish(KITCHEN_PRESSURE_TOPIC, 0, false, (String(platform[4].pressure)).c_str());
           mqttClient.publish(KITCHEN_PIR_TOPIC, 0, false, (String(platform[4].pir)).c_str());
+          mqttClient.publish(KITCHEN_SEND_FAILURES_TOPIC, 0, false, (String(platform[4].sendFailures)).c_str()); 
         break;
         case 5:
           //bathroom topics
@@ -3147,13 +3169,15 @@ void publishMQTT(uint8_t i){
           mqttClient.publish(BATHROOM_HUMIDITY_TOPIC, 0, false, (String(platform[5].humidity)).c_str());
           mqttClient.publish(BATHROOM_PRESSURE_TOPIC, 0, false, (String(platform[5].pressure)).c_str());
           mqttClient.publish(BATHROOM_PIR_TOPIC, 0, false, (String(platform[5].pir)).c_str());
-        break;
+          mqttClient.publish(BATHROOM_SEND_FAILURES_TOPIC, 0, false, (String(platform[5].sendFailures)).c_str()); 
+       break;
         case 6:
           //bathroom2 topics
           mqttClient.publish(BATHROOM2_TEMPERATURE_TOPIC, 0, false, (String(platform[6].temperature)).c_str());
           mqttClient.publish(BATHROOM2_HUMIDITY_TOPIC, 0, false, (String(platform[6].humidity)).c_str());
           mqttClient.publish(BATHROOM2_PRESSURE_TOPIC, 0, false, (String(platform[6].pressure)).c_str());
           mqttClient.publish(BATHROOM2_PIR_TOPIC, 0, false, (String(platform[6].pir)).c_str());
+          mqttClient.publish(BATHROOM2_SEND_FAILURES_TOPIC, 0, false, (String(platform[6].sendFailures)).c_str()); 
         break;
       }
       //platform[1].doorCount=0;
@@ -3167,6 +3191,7 @@ void publishMQTT(uint8_t i){
       //mqttClient.publish(BATHROOM_PIR_TOPIC, 0, false, (String(platform[5].pir)).c_str());
       //mqttClient.publish(BATHROOM2_PIR_TOPIC, 0, false, (String(platform[6].pir)).c_str());
     #endif  //CASA_1
+    
     #ifdef CASA_2
       switch(i){
         case 0:
@@ -3175,7 +3200,7 @@ void publishMQTT(uint8_t i){
           mqttClient.publish(HUB_TEMPERATURE_TOPIC, 0, false, (String(platform[0].temperature)).c_str());
           mqttClient.publish(HUB_HUMIDITY_TOPIC, 0, false, (String(platform[0].humidity)).c_str());
           mqttClient.publish(HUB_SEND_FAILURES_TOPIC, 0, false, (String(platform[0].sendFailures)).c_str()); 
-          //mqttClient.publish(HUB_PRESSURE_TOPIC, 0, false, (String(platform[0].pressure)).c_str());
+          mqttClient.publish(HUB_PRESSURE_TOPIC, 0, false, (String(platform[0].pressure)).c_str());
         break;
         case 1:
           //Basement:
@@ -3214,6 +3239,14 @@ void publishMQTT(uint8_t i){
           mqttClient.publish(KITCHEN_SEND_FAILURES_TOPIC, 0, false, (String(platform[3].sendFailures)).c_str()); 
         break;
 
+        case 4:
+
+        //bathroom topics
+        mqttClient.publish(BATHROOM_TEMPERATURE_TOPIC, 0, false, (String(platform[4].temperature)).c_str());
+        mqttClient.publish(BATHROOM_HUMIDITY_TOPIC, 0, false, (String(platform[4].humidity)).c_str());
+        //mqttClient.publish(BATHROOM_LUX_TOPIC, 0, false, (String(platform[4].lux)).c_str());
+        mqttClient.publish(BATHROOM_SEND_FAILURES_TOPIC, 0, false, (String(platform[4].sendFailures)).c_str()); 
+      break;
       }
 
       //platform[3].doorCount=0;
@@ -3233,7 +3266,6 @@ void publishMQTT(uint8_t i){
         //mqttClient.publish(HUBa_PRESSURE_TOPIC, 0, false, (String(platform[0].pressure)).c_str());
       break;
       case 1:
-     
         //Basement:
         //mqttClient.publish(strcat(location[1],TEMPERATURE_TOPIC), 0, false, (String(platform[1].temperature)).c_str());
         mqttClient.publish(BASEMENTa_TEMPERATURE_TOPIC, 0, false, (String(platform[1].temperature)).c_str());
@@ -3248,9 +3280,7 @@ void publishMQTT(uint8_t i){
         mqttClient.publish(BASEMENTa_DH2O_TOPIC, 0, false, (String(platform[1].dH2o)).c_str());  
         mqttClient.publish(BASEMENTa_SEND_FAILURES_TOPIC, 0, false, (String(platform[1].sendFailures)).c_str()); 
       break;
-
       case 2:
-
         //bathroom topics
         mqttClient.publish(BATHROOMa_TEMPERATURE_TOPIC, 0, false, (String(platform[2].temperature)).c_str());
         mqttClient.publish(BATHROOMa_HUMIDITY_TOPIC, 0, false, (String(platform[2].humidity)).c_str());
@@ -3258,8 +3288,7 @@ void publishMQTT(uint8_t i){
         mqttClient.publish(BATHROOMa_SEND_FAILURES_TOPIC, 0, false, (String(platform[2].sendFailures)).c_str()); 
       break;
     }       
-    #endif  //casa_2a
-  
+    #endif  //casa_2a 
   #endif
 }
 
