@@ -1,7 +1,13 @@
 
 const char* APP = "AmbientAP ";
-const char* VERSION = "2023 v1102 ";
+const char* VERSION = "2025 v0307 ";
 
+/* 2025 Changes:
+ * 3/7/2025 sendFailureCount is used to prevent repeat transmission to Home Assistant
+ * haPublishFlag decouples HA reports from ESP reports using reportFlag
+ * cease measuring temp hum press for IDs that dont have sensors
+ */
+ 
 /////////////////////////////////////////////////////////////////////////////////////
 //
 // AmbientAP is a flexible, multi-featured sensor platform.  It can:
@@ -80,24 +86,31 @@ NOTES -  1. IF using MELife for ESP32 ESP-32S Development Board, use Arduino IDE
                          //AmbientAP will determine the wifi channel being used to communicate with the hub
                          ///NOTE - Enable gateway if using ESPNOW and hub is reporting to Home Assistant!!
 
+  //Select one of the 3 following protocols for communication between HUB and sensor platforms if there is a hub; 
+  // ESPNOW_1to1 is preferred; NOTE: HTTPGET is a memory hog:
+  //*****************
+  //#define HTTPGET          //set up as wifi server w/o router to transfer data upon receiving a http GET message
+  #define ESPNOW_1to1     //send data to one peer: enter MAC address of receiver in secrets.h file  
+  //#define ESPNOW_1toN   //send to multiple peers: enter MAC addresses of receivers in secrets.h file   (not functional yet) 
+  
   //*****************************
   // 1. Select one CASA (reporting site which may have unique configuration):
   // IMPORTANT: CHANGE SECRETS.H FILE IF CHANGING CASA !!!
   //*****************************
- // #define CASA_1            // Site #1 (FL)
+  #define CASA_1            // Site #1 (FL)
   //#define CASA_1a
  //#define CASA_2            // Site #2 LillyGo
-  #define CASA_2a           // Site# 2, unit a Botletics
+ // #define CASA_2a           // Site# 2, unit a Botletics
 
   //*****************
   // 2. Select unique sensorID
   //*****************
 //   #define ID1    //FL gar door  ME basement
-   #define ID2       //FL car sonic ME 2 bedroom 2a gur=est bath wh-BL
-//  #define ID3    //FL car hatch ME kitchen
+//   #define ID2       //FL car sonic ME 2 bedroom 2a gur=est bath wh-BL
+  #define ID3    //FL car hatch ME kitchen
 //  #define ID4    //FL Kitchen ME bathroom
-  //#define ID5    //FL bath ME #13 bath
- //  #define ID6    //FL bath2 / lanai
+//  #define ID5    //FL bath ME #13 bath
+//   #define ID6    //FL bath2 / lanai
 
   //*******************************   
   // 3. Select debug aids/monitors:
@@ -110,16 +123,12 @@ NOTES -  1. IF using MELife for ESP32 ESP-32S Development Board, use Arduino IDE
     #define oledFormat2         // displays all sensors on optional OLED display
     #define h2oThreshhold  1    // wet - dry threshhold % for OLED display  
   #endif
-  bool reportFlag = true;      //issue report to HUB after startup, also when new data exists 
-  uint8_t haPublishFlag = 0;  //issue report to HA if #define HA
 
   //*****************
-  // 6. Select one of the 3 following protocols for communication between HUB and sensor platforms if there is a hub; 
-  // ESPNOW_1to1 is preferred; NOTE: HTTPGET is a memory hog:
+  // 4. Misc flags/variables
   //*****************
-  //#define HTTPGET          //set up as wifi server w/o router to transfer data upon receiving a http GET message
-  #define ESPNOW_1to1     //send data to one peer: enter MAC address of receiver in secrets.h file  
-  //#define ESPNOW_1toN   //send to multiple peers: enter MAC addresses of receivers in secrets.h file   (not functional yet) 
+  bool reportFlag = true;      //issue report to HUB after startup, also when new data exists 
+  bool haPublishFlag = true;   //issue report to HA after startup, also when new data exists 
 
   //*****************                                                                                    
   // 5. Timing Parameters
@@ -208,7 +217,7 @@ NOTES -  1. IF using MELife for ESP32 ESP-32S Development Board, use Arduino IDE
       #define BME_ 
 
       #define ESP32_           //Recommended choice is esp32
-      #define d1MiniESP32_     //select ESP32 and d1MiniESP32 if diMiniESP32 is used
+      #define d1MiniESP32_     //select both ESP32 and d1MiniESP32 if diMiniESP32 is used
       //#define ESP8266_       //use for wemos D1 Mini.  
                                //NOTE Multiple D1 Minis seem to interfere with one another and have limited wireless range                 
 
@@ -500,7 +509,9 @@ NOTES -  1. IF using MELife for ESP32 ESP-32S Development Board, use Arduino IDE
   //*****************
   // ESP NOW One to One Libraries
   //*****************
+  uint8_t sendFailureCount = 0;        // # failed attempts to send via espNow; if >0, data not resent to HA; data resent to ESPNow 
   #ifdef ESPNOW_1to1 
+    
     #include <esp_now.h>
     #ifdef ESP32_
       #ifndef WIFI_H
@@ -769,7 +780,7 @@ void displayStatus(){
       int iTemperature=sensorData.temperature + .5;
       oled.print(iTemperature);
       #ifdef printMode
-        Serial.print(" tem, Temperature: ");Serial.print(tem);Serial.print(", ");Serial.print(iTemperature);Serial.println(" *F");
+        //Serial.print(" tem, Temperature: ");Serial.print(tem);Serial.print(", ");Serial.print(iTemperature);Serial.println(" *F");
       #endif 
       if(tem=="--"){
         oled.print (" F?");
@@ -792,7 +803,7 @@ void displayStatus(){
         oled.println("%    ");
       }
       #ifdef printMode
-        Serial.print(" hum, Humidity: ");Serial.print(hum);Serial.print(F(", "));Serial.print(iHumidity);Serial.println(F("%"));
+       // Serial.print(" hum, Humidity: ");Serial.print(hum);Serial.print(F(", "));Serial.print(iHumidity);Serial.println(F("%"));
       #endif  
 
       if(luxs[sensorID]==1){
@@ -894,7 +905,12 @@ void displayVersion(){
       sensorData.doorCount = 0;
       sensorData.pir = 0;
       sensorData.pirCount = 0;
-      sensorData.sendFailures=0;
+      
+      //REJ 3/7/2025:
+      //sensorData.sendFailures=0;
+      sensorData.sendFailures = sendFailureCount;
+      sendFailureCount = 0;
+      //REJ end
       
       if(sleepSeconds==0){
         reportFlag=false;        
@@ -906,10 +922,18 @@ void displayVersion(){
         ESP.deepSleep(sleepSeconds * uS_TO_S_FACTOR);
       }  
     }else{
-      sensorData.sendFailures ++ ;
-      Serial.print("sensorData.sendFailures = ");Serial.println(sensorData.sendFailures);
-      if (sensorData.sendFailures >= espNowAttemptsAllowed){ 
-        sensorData.sendFailures = 0;  //must reset here otherwise only one send attemp next times 
+       
+      //REJ 3/7/2025:
+      //sensorData.sendFailures ++ ;
+      //Serial.print("sensorData.sendFailures = ");Serial.println(sensorData.sendFailures);
+      //if (sensorData.sendFailures >= espNowAttemptsAllowed){ 
+      //  sensorData.sendFailures = 0;  //must reset here otherwise only one send attemp next times 
+      sendFailureCount ++;
+      Serial.print("sendFailureCount = ");Serial.println(sendFailureCount);
+      if (sendFailureCount >= espNowAttemptsAllowed){ 
+        sensorData.sendFailures = sendFailureCount;  
+      //REJ end
+      
         if(sleepSeconds==0){
           //reportFlag=false;        
         }else{
@@ -1024,7 +1048,10 @@ int32_t getWiFiChannel(const char *ssid) {
   if (int32_t n = WiFi.scanNetworks()) {
       for (uint8_t i=0; i<n; i++) {
           if (!strcmp(ssid, WiFi.SSID(i).c_str())) {
-              return WiFi.channel(i);
+            #ifdef printMode  
+              Serial.print(F("*getWifiChannel* = "));Serial.println(WiFi.channel(i));
+            #endif
+            return WiFi.channel(i);
           }
       }
   }
@@ -1084,6 +1111,7 @@ void readAh2o(){
     if(abs(x-sensorData.aH2o)>=1){
       sensorData.aH2o = x;
       reportFlag = true;
+      haPublishFlag = true; 
     }
     #ifdef printMode
       Serial.println(sensorData.aH2o);//Serial.println(F("% "));
@@ -1125,6 +1153,7 @@ void readDoor(){
         sensorData.door = !digitalRead(pinDoor); //report door state 0 if closed, 1 if open
         sensorData.doorCount++;                  //increment doorCount
         reportFlag = true;                       //report right away 
+        haPublishFlag = true;
     }
     
     
@@ -1141,6 +1170,7 @@ void readDoor(){
         sensorData.doorCount++;                  //increment doorCount
         priorDoor=sensorData.door;                //save dooor status for later comparison
         reportFlag = true;
+        haPublishFlag = true;
       }
     }else{
       //doorCount = 0 (no prior unreported open doors) processing:
@@ -1158,37 +1188,40 @@ void readDoor(){
 //*********************************
 void readHumidity() {  
   //valid data updates sensorData.humidity and hum; invalid updates only hum with  "--"
-  #ifdef printMode
-    Serial.print(F("*readHumidity* "));
-  #endif  
-  float x=0;
-  #ifdef AHT10_
-    sensors_event_t humidity, temp;
-    aht.getEvent(&humidity, &temp);// populate temp and humidity objects with fresh data
-    x=humidity.relative_humidity;  
-  #endif  
-  #ifdef DHT_
-    x = (dht.readHumidity());
-  #endif
-  #ifdef BME_
-    x = (bme.readHumidity());
-  #endif
-  #ifdef SHT20_
-    x = (sht20.readHumidity());  
-  #endif
-  hum=String(x);
-  if (hum == "nan") {hum = "--";
-   }else{
-    
-     //update only if >=1 unit change
-    if(abs(x-sensorData.humidity)>=1.0){
-      sensorData.humidity = x;
-      reportFlag=true;
-    }  
-  }
-  #ifdef printMode
-    Serial.print(F("humidity, hum: "));Serial.print(sensorData.humidity);Serial.print(F(", "));Serial.println(hum);
-  #endif
+  if (hums[sensorID]==1){  
+    #ifdef printMode
+      Serial.print(F("*readHumidity* "));
+    #endif  
+    float x=0;
+    #ifdef AHT10_
+      sensors_event_t humidity, temp;
+      aht.getEvent(&humidity, &temp);// populate temp and humidity objects with fresh data
+      x=humidity.relative_humidity;  
+    #endif  
+    #ifdef DHT_
+      x = (dht.readHumidity());
+    #endif
+    #ifdef BME_
+      x = (bme.readHumidity());
+    #endif
+    #ifdef SHT20_
+      x = (sht20.readHumidity());  
+    #endif
+    hum=String(x);
+    if (hum == "nan") {hum = "--";
+     }else{
+      
+       //update only if >=1 unit change
+      if(abs(x-sensorData.humidity)>=1.0){
+        sensorData.humidity = x;
+        reportFlag=true;
+        haPublishFlag = true;
+      }  
+    }
+    #ifdef printMode
+      Serial.print(F("humidity, hum: "));Serial.print(sensorData.humidity);Serial.print(F(", "));Serial.println(hum);
+    #endif
+  }  
 }
 
 //***********************************
@@ -1202,6 +1235,7 @@ void readPhotoCell(){
     if(abs(sensorData.lux - x)>=1){
        sensorData.lux = x;
        reportFlag = true;
+       haPublishFlag = true;
     }
   
     #ifdef printMode
@@ -1250,6 +1284,7 @@ void readSonic(){
     if (abs(distance-sensorData.sonic)>=6 ) {
       sensorData.sonic=distance;       
       reportFlag = true;
+      haPublishFlag = true;
     }    
     
     #ifdef printMode
@@ -1261,65 +1296,71 @@ void readSonic(){
 //***********************************
 void readPressure(){   
   //valid data updates sensorData.pressure and pres; invalid updates only pres with  "--"
-  #ifdef printMode
-    Serial.print(F("*readPressure* "));
-  #endif 
-  float x = 0; 
-  pres="--"; //indicate no reading
-  #ifdef BME_ 
-    x = bme.readPressure()/100.0;    //millibars
-    pres = String(x);
-    if (pres == "nan") {pres = "--";
-      }else{ 
-      //update only if >=1 unit change
-      if(abs(x-sensorData.pressure)>=1){
-        sensorData.pressure = x;
-        reportFlag=true;
-      }  
-    }
-  #endif                                                                    
-  #ifdef printMode
-    Serial.print(F("pressure, pres: "));Serial.print(sensorData.pressure);Serial.print(F(", "));Serial.println(pres);
-  #endif  
+  if (press[sensorID]==1){
+    #ifdef printMode
+      Serial.print(F("*readPressure* "));
+    #endif 
+    float x = 0; 
+    pres="--"; //indicate no reading
+    #ifdef BME_ 
+      x = bme.readPressure()/100.0;    //millibars
+      pres = String(x);
+      if (pres == "nan") {pres = "--";
+        }else{ 
+        //update only if >=1 unit change
+        if(abs(x-sensorData.pressure)>=1){
+          sensorData.pressure = x;
+          reportFlag=true;
+          haPublishFlag = true;
+        }  
+      }
+    #endif                                                                    
+    #ifdef printMode
+      Serial.print(F("pressure, pres: "));Serial.print(sensorData.pressure);Serial.print(F(", "));Serial.println(pres);
+    #endif  
+  }  
 }
 
 //***********************************
 void readTemperature() {  
   //valid data updates sensorData.temperature and temp; invalid updates only temp with  "--"
-  #ifdef printMode
-    Serial.print(F("*readTemperature* "));
-  #endif 
-  float x = 0; 
-  #ifdef AHT10_
-    sensors_event_t humidity, temp;
-    aht.getEvent(&humidity, &temp);// populate temp and humidity objects with fresh data
-    //Serial.print("Temperature: "); Serial.print(temp.temperature); Serial.println(" degrees C");
-    //Serial.print("Humidity: "); Serial.print(humidity.relative_humidity); Serial.println("% rH");
-    x=temp.temperature;
-    x=1.8*x+32.0;
-  #endif 
-  #ifdef DHT_
-    x=dht.readTemperature(true);  //true = *F
-  #endif
-  #ifdef BME_
-    x=1.8*bme.readTemperature()+32.0;
-  #endif 
-  #ifdef SHT20_
-    x = 1.8*sht20.readTemperature()+32.0;
-  #endif
-  tem=String(x);
-  if (tem=="nan"){tem = "--";
-  }else{
-    //update temp only if >=1 degree change
-    if(abs(x-sensorData.temperature)>=1.0){
-      sensorData.temperature = x;
-      reportFlag=true;
-    }  
-  }
-
-  #ifdef printMode 
-    Serial.print(F("temperature, tem: "));Serial.print(sensorData.temperature);Serial.print(F(", "));Serial.println(tem);
-  #endif    
+  if (temps[sensorID]==1){  
+    #ifdef printMode
+      Serial.print(F("*readTemperature* "));
+    #endif 
+    float x = 0; 
+    #ifdef AHT10_
+      sensors_event_t humidity, temp;
+      aht.getEvent(&humidity, &temp);// populate temp and humidity objects with fresh data
+      //Serial.print("Temperature: "); Serial.print(temp.temperature); Serial.println(" degrees C");
+      //Serial.print("Humidity: "); Serial.print(humidity.relative_humidity); Serial.println("% rH");
+      x=temp.temperature;
+      x=1.8*x+32.0;
+    #endif 
+    #ifdef DHT_
+      x=dht.readTemperature(true);  //true = *F
+    #endif
+    #ifdef BME_
+      x=1.8*bme.readTemperature()+32.0;
+    #endif 
+    #ifdef SHT20_
+      x = 1.8*sht20.readTemperature()+32.0;
+    #endif
+    tem=String(x);
+    if (tem=="nan"){tem = "--";
+    }else{
+      //update temp only if >=1 degree change
+      if(abs(x-sensorData.temperature)>=1.0){
+        sensorData.temperature = x;
+        reportFlag=true;
+        haPublishFlag = true;
+      }  
+    }
+  
+    #ifdef printMode 
+      Serial.print(F("temperature, tem: "));Serial.print(sensorData.temperature);Serial.print(F(", "));Serial.println(tem);
+    #endif  
+  }    
 }
 
 //*************************************
@@ -1329,6 +1370,7 @@ uint8_t readWakeupID(){
     Serial.println(F("*readWakupID*"));
   #endif   
   reportFlag=true;
+  haPublishFlag = true;
   esp_sleep_wakeup_cause_t wakeup_reason;
   wakeup_reason = esp_sleep_get_wakeup_cause();
   switch(wakeup_reason){
@@ -1380,22 +1422,22 @@ uint8_t readWakeupID(){
 void sendEspNow_1to1(){
   //format data and send to single ESPNOW peer if #define espnow_1to1 is enabled
   #ifdef ESPNOW_1to1
-    #ifdef printMode
-      Serial.print(F("*sendEspNow1to1* "));
-    #endif    // 
-    sensorData.id = sensorID;
-    //printSensorData();
-
-    esp_err_t espResult = esp_now_send(SECRET_broadcastAddress, (uint8_t *) &sensorData, sizeof(sensorData)); // Send message via ESP-NOW
-    #ifdef printMode
-      if (espResult == ESP_OK) { 
-        Serial.println(F(" Sent with success"));
-        delay(espNowDelay);  //delay to prevent resending prior to response
-      }else{
-        Serial.println(F(" Error sending the data"));  
-      }
-    #endif
-    delay(espNowDelay);
+      #ifdef printMode
+        Serial.print(F("*sendEspNow1to1* "));
+      #endif    // 
+      sensorData.id = sensorID;
+      //printSensorData();
+  
+      esp_err_t espResult = esp_now_send(SECRET_broadcastAddress, (uint8_t *) &sensorData, sizeof(sensorData)); // Send message via ESP-NOW
+      #ifdef printMode
+        if (espResult == ESP_OK) { 
+          Serial.println(F(" Sent with success"));
+          delay(espNowDelay);  //delay to prevent resending prior to response
+        }else{
+          Serial.println(F(" Error sending the data"));  
+        }
+      #endif
+      delay(espNowDelay);  
   #endif
 }
 
@@ -1947,10 +1989,10 @@ void connectToMqtt() {
 void onMqttConnect(bool sessionPresent) {
   #ifdef HA
     #ifdef printMode
-      Serial.println(F("*onMqttConnect*"));
-      Serial.print("Connected to MQTT* Session: "); Serial.println(sessionPresent);
+//      Serial.println(F("*onMqttConnect*"));
+//      Serial.print("Connected to MQTT* Session: "); Serial.println(sessionPresent);
     #endif
-publishMQTT(sensorID);
+//publishMQTT(sensorID);
 
     //Serial.println("Connected to MQTT."); 
     // subscribe ESP32 to following topics
@@ -1965,6 +2007,8 @@ publishMQTT(sensorID);
 
 void publishMQTT(uint8_t i){
   #ifdef HA
+  
+  if (haPublishFlag){
     #ifdef printMode
       Serial.print(F("*publishMQTT* "));Serial.println(i);
     #endif
@@ -1997,7 +2041,7 @@ void publishMQTT(uint8_t i){
           mqttClient.publish(HATCH_SEND_FAILURES_TOPIC, 0, false, (String(sensorData.sendFailures)).c_str());           
         break;
         case 4:
-          //kitchen topis
+          //kitchen topics
           mqttClient.publish(KITCHEN_TEMPERATURE_TOPIC, 0, false, (String(sensorData.temperature)).c_str());
           mqttClient.publish( KITCHEN_HUMIDITY_TOPIC, 0, false, (String(sensorData.humidity)).c_str());
           mqttClient.publish(KITCHEN_PRESSURE_TOPIC, 0, false, (String(sensorData.pressure)).c_str());
@@ -2130,9 +2174,11 @@ void publishMQTT(uint8_t i){
       break;
     }       
     #endif  //casa_2a
-
-//haPublishFlag = 1;
-
+    #ifdef printMode
+      Serial.println(F("*publishMQTT msg completed*"));
+    #endif
+    haPublishFlag = false;
+  }
   #endif
 }
 
@@ -2162,7 +2208,7 @@ void onMqttPublish(uint16_t packetId) {  //does not get called
   #ifdef printMode
     Serial.print("onMqttPublish packet ID = ");Serial.println(packetId);
   #endif
-//haPublishFlag = 1;
+  haPublishFlag = false;
 }
 
 // Modify this function to handle what happens when you receive a push message on a specific topic
@@ -2287,11 +2333,11 @@ void loop(){                  //Execute repeatedly if system did not go to sleep
                               //send in main loop in case multiple tries are necessary.
     printSensorData();
   }
+
   if (reportFlag){            //Send data each time it changes as indicated by reportFlag
-    publishMQTT(sensorID);    // publish to HA if enabled
+    publishMQTT(sensorID);    // publish to HA if enabled 
     sendEspNow_1to1();        //format data and send espnow msg to a single peer if #define ESPNOW_1to1 is enabled; 
                               //successful data transfer will cause the system to sleep if sleepSeconds > 0                                
-
     sendEspNow_1toN();        //format data and send espnow msg to multiple peers if #define ESPNOW_1toN is enabled; 
   }                                
 }                             //repeat at top of the loop
