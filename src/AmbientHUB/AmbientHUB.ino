@@ -99,9 +99,9 @@ const char* VERSION = "2023 v1101";
   //*****************************
   // 2. Select one CASA (reporting site which may have unique configuration):
   //*****************************
-//  #define CASA_1            // Site #1 FL LillyGo
+  #define CASA_1            // Site #1 FL LillyGo
   //#define CASA_1a           // Site# 1a FL Botletics
-  #define CASA_2            // Site #2 ME LillyGo2
+//  #define CASA_2            // Site #2 ME LillyGo2
 //  #define CASA_2a           // Site# 2a ME Botletics
 
   #ifdef CASA_1
