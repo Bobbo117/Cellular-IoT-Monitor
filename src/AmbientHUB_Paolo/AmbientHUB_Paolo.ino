@@ -3,7 +3,7 @@ const char* APP = "AmbientHUB ";
 const char* VERSION = "2025 0313";
 
 /* Mar 13, 2025 modifications
- *  set up HUB only w/bme280 or DHT11 only; OLED optional; dweet optional
+ *  set up HUB w/bme280 or DHT11 only; OLED optional; dweet optional
  *  
  */
 
@@ -23,17 +23,21 @@ const char* VERSION = "2025 0313";
   #define cellularMode        //  enables a cellular connection; // = no connection (for debugging code without racking up cellular costs)
   #define dweetMode           // enables use of dweet. www.Dweet.com is free.  The cellular SIM imei is used as a key to
                               // log and monitor sensor values.
-  char dataTag[] = "XX";   // <<< unique prefix to identify source of data >
+  char dataTag[] = "XX";   // <<< unique prefix to identify source of data in case you use multiple hubs >
   #ifdef cellularMode
     //#define simSleepMode   // shut off sim modem between readings 
   #endif
     
     //*****************
     // Timing Parameters
+    //
+    // Note - Heartbeat means how often data is sent over cellular connection
+    //
     //***************** 
+    
     const int espSleepSeconds = 0; //48*60;     // or 0; heartbeat period OR wakes up out of sleepMode after sleepMinutes           
     const long espAwakeSeconds = 5*60;    // interval in seconds to stay awake as HUB; you dont need to change this if espSleepSeconds = 0 indicating no sleep
-    int heartbeatMinutes = 6; //60; //10;             // (default 10) heartbeat delay after HUB awakens.  this needs to be at least 2 minutes less than espAwakeSeconds
+    int heartbeatMinutes = 6; //60; //10;  // (default 10) heartbeat delay after HUB awakens.  this needs to be at least 2 minutes less than espAwakeSeconds
                                            // IF espSleepSeconds - 0, then this is the heartbeat frequency.
     const long chillSeconds = 10;          // (not used)interval between readings if sleepSeconds = 0 slows serial monitor updates
     const long sensorSeconds = 1*60;        // interval in seconds to refresh time sensitive sensor readings 
@@ -53,17 +57,11 @@ const char* VERSION = "2025 0313";
   // 3. Sensor Inventory
   //*****************
   uint8_t sensorID = 0;               //HUB identifier = 0 see next comment  
-  // arrays to indicate types of sensors aboard each sensor platform (1=presnt, 0 = absent)
-  // HUB  sensorID=0; boards are 1,2,3.. example: temps[]={1,0,1,0} indicates hub and sensor #2 have temp sensors, sensor #1 and #3 do not.
 
-    #define numberOfPlatforms 1         // number of sensor platforms available  + 1 for HUB
-                                        // example: if hub has sensors, and there are 3 wireless platforms, numberOfPlatforms = 4
-                                        //const char* location[] = {"hub","garage","sonic","hatch", "kitchen","bathroom","bathroom2,"spare"};
-    uint8_t temps[] = {1,1,0,0, 1,1,1,0}, hums[]=  {1,1,0,0, 1,1,1,0}, dbms[]= {1,0,0,0, 0,0,0,0}, pres[]={0,0,0,0, 0,0,0,0}, bat[]=   {0,0,0,0, 0,0,0,0};
-    uint8_t luxs[] =  {0,1,0,0, 0,0,0,0}, h2os[] = {0,0,0,0, 0,0,0,0}, doors[]={0,1,0,1, 0,0,0,0}, pirs[]={0,1,0,0, 1,1,1,0}, sonics[]={0,0,1,0, 0,0,0,0};
- 
+  #define numberOfPlatforms 1         // number of sensor platforms available  + 1 for HUB
+    
   //*****************
-  // 4. sensor data structure
+  // 4. sensor data structure allows for growth
   //*****************
    typedef struct platforms {  // create a definition of platformm sensors
       uint8_t id;              // id must be unique for each sender; HUB  id=0; sensor platforms are 1,2,3
@@ -84,10 +82,7 @@ const char* VERSION = "2025 0313";
   platforms sensorData = {0,0,0,0,0,0,0,0,0,0,0,0,0}; // Creates a structure called sensorData to receive data from sensor platforms
   platforms dataOut = {1,0,0,0,0,0,0,0,0,0,0,0,0};    // structure for sending data out
   RTC_DATA_ATTR platforms platform[numberOfPlatforms]; //stores the reaadings persistently in an array of structures
-  uint8_t aH2oMeasured = 0; // sensor measurement prior to preocessing
-  //RTC_DATA_ATTR uint8_t priorDoor = 0; //last door status = 0 (closed) or 1 (open)
   RTC_DATA_ATTR int dbm[] = {-00,0,0,0, 0,0,0,0};      //hub signal strenth not included in the platform structure
-  //RTC_DATA_ATTR int16_t vbat[] = {0,0,0,0, 0,0,0,0}; //hub battery voltage (mv) not included in the platform structure
   //**********************
   uint8_t platformStatus[numberOfPlatforms];
   uint8_t sensorStatus[numberOfPlatforms];  //wifi success 1 or 0 to display : or ?? on oled header in displayStatus() or to stop at 1 reading if limited awake time
@@ -109,7 +104,7 @@ const char* VERSION = "2025 0313";
   char URL[255];                      // buffer for request URL
   char body[255];                     // buffer for POST 
   uint8_t wakeupID;                   //reason sensor wode up; see readWakeupID 
-  bool reportFlag = true;             //????
+  bool reportFlag = true;           
 
   //*****************
   // 6. Timer stuff
@@ -427,44 +422,32 @@ void formatData(){
     strcat (buf,prefix);    //Add prefix (identifier if the location being reported)
     strcat(buf,prelude);    //Alert hightlight such as GAR OPEN or blank
   }
-   
+
+     
   //process temperature
   strcpy(separator,prefix);  //separator used between groups of similar data  
-  for(int i=0;i<numberOfPlatforms;i++){
-    if(temps[i]==1){
       strcat(buf,separator);
-      dtostrf(platform[i].temperature, 1, 0, buf2); 
+      dtostrf(platform[0].temperature, 1, 0, buf2); 
       strcat(buf, buf2);
       strcpy(separator,comma);
-    }
-  }
+
   strcat(buf,"F");
   
   //process humidity
   strcpy(separator,prefix);  //separator used between groups of similar data  
-  for(int i=0;i<numberOfPlatforms;i++){
-    if(hums[i]==1){
       strcat(buf,separator);
-      dtostrf(platform[i].humidity, 1, 0, buf2); 
+      dtostrf(platform[0].humidity, 1, 0, buf2); 
       strcat(buf, buf2);
       strcpy(separator,comma);
-    }
-  }
 //  strcat(buf,"%");
 
   //process signal strength
   strcpy(separator,prefix);  //separator used between groups of similar data  
-  for(int i=0;i<numberOfPlatforms;i++){  
-    if(dbms[i]==1){
       //strcat(buf,separator);  //let minus sogn of dbm be separator
-      dtostrf(dbm[i], 1, 0, buf2); 
+      dtostrf(dbm[0], 1, 0, buf2); 
       strcat(buf, buf2);
        strcpy(separator,comma);
-    }
-  }
 
-
-  
   //append bootCount
   strcpy(separator,prefix);  //separator used between groups of similar data 
   strcat(buf,separator); 
@@ -594,7 +577,6 @@ void printSensorData(){
       Serial.println(F("id      temp    hum    "));
       
       for (int i=0;i<numberOfPlatforms;i++){ 
-        //Serial.print(platform[i].id);Serial.print("\t");
         Serial.print(i);Serial.print("\t");
         Serial.print(platform[i].temperature);Serial.print("\t");
         Serial.println(platform[i].humidity);
@@ -665,7 +647,6 @@ bool readNetStatus() {
 uint8_t readSensorData(uint8_t i){             // temp & voltage 
 
   uint8_t returnFlag = 1;  //return success causes ':' display on OLED
-  if (sensors[i]=="local"){
   
     platform[i].id=i;
   
@@ -712,7 +693,7 @@ uint8_t readSensorData(uint8_t i){             // temp & voltage
       returnFlag = 0;
     }
       
-  }
+  
   #ifdef testMode
     Serial.print("returnFlag = ");Serial.println (returnFlag);  
   #endif
@@ -802,6 +783,7 @@ static int sensorTimeIsUp(long msec){    //Read data at timed intervals
 void serialPrintVersion(){         
    //Show startup info to serial monitor if printMode enabled
    #ifdef printMode
+      delay(4000);
       Serial.begin(115200);         // Initialize Serial Monitor 
       turnOnBoardLED();           //turn on board LED during setup
       Serial.print(F("***** "));Serial.print(F(APP)); Serial.println(F(VERSION));
