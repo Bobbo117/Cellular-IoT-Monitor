@@ -105,9 +105,9 @@ NOTES -  1. IF using MELife for ESP32 ESP-32S Development Board, use Arduino IDE
   //*****************
   // 2. Select unique sensorID
   //*****************
-//   #define ID1    //FL gar door  ME basement
+   #define ID1    //FL gar door  ME basement
 //   #define ID2       //FL car sonic ME 2 bedroom 2a gur=est bath wh-BL
-  #define ID3    //FL car hatch ME kitchen
+//  #define ID3    //FL car hatch ME kitchen
 //  #define ID4    //FL Kitchen ME bathroom
 //  #define ID5    //FL bath ME #13 bath
 //   #define ID6    //FL bath2 / lanai
