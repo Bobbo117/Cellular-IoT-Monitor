@@ -28,7 +28,54 @@ and an optional **OLED** display.
 ## Hands on Technology presentation of 2/2/2022
 
 Available ![here](https://github.com/Bobbo117/Cellular-IoT-Monitor/blob/main/doc/Cellular%20IoT%20Homewatch.pdf)
- 
+
+<img width="640" height="360" alt="image" src="https://github.com/user-attachments/assets/20706cdb-4d9c-4480-8253-2d5d93e25787" />
+<img width="640" height="360" alt="image" src="https://github.com/user-attachments/assets/fdac9afa-5380-434b-a6b1-5a3061b3ade8" />
+<img width="640" height="360" alt="image" src="https://github.com/user-attachments/assets/dc222f43-c16d-4e21-9295-73912c72eb0c" />
+<img width="640" height="360" alt="image" src="https://github.com/user-attachments/assets/6cefa03a-ad8b-4350-bec1-d0b9f47f0f7c" />
+<img width="640" height="360" alt="image" src="https://github.com/user-attachments/assets/e9239603-03e7-473c-a210-e1de91fc909a" />
+<img width="640" height="360" alt="image" src="https://github.com/user-attachments/assets/1fd8b6fb-1663-4151-9c65-44c85847df29" />
+<img width="640" height="360" alt="image" src="https://github.com/user-attachments/assets/4fb2b8c0-59f0-4a56-9c78-eb26d497461d" />
+<img width="640" height="360" alt="image" src="https://github.com/user-attachments/assets/975e2df0-5ea8-4eff-afcc-fbfbf5e5dc4d" />
+<img width="640" height="360" alt="image" src="https://github.com/user-attachments/assets/69486b8d-c001-4542-9ee1-1ba91980c77d" />
+<img width="640" height="360" alt="image" src="https://github.com/user-attachments/assets/135f18a6-2758-4119-bce1-1d329f641a3b" />
+<img width="640" height="360" alt="image" src="https://github.com/user-attachments/assets/fa0b85c0-eb35-4f4a-8612-e61931f7d9d9" />
+<img width="640" height="360" alt="image" src="https://github.com/user-attachments/assets/6c78b677-7294-4ed3-b157-09aa3efdd129" />
+<img width="640" height="360" alt="image" src="https://github.com/user-attachments/assets/3b311ce6-828b-4ca6-8362-a34e9c42e7cc" />
+<img width="640" height="360" alt="image" src="https://github.com/user-attachments/assets/792c8688-b35d-4a85-920f-c9b523a97c9f" />
+<img width="640" height="360" alt="image" src="https://github.com/user-attachments/assets/b12654d5-c9ee-4336-9b6a-037c22393a6e" />
+<img width="640" height="360" alt="image" src="https://github.com/user-attachments/assets/5c134d3c-5afa-4803-8953-83f0e7b3474d" />
+<img width="640" height="360" alt="image" src="https://github.com/user-attachments/assets/dcdd76bd-4987-48a8-b77e-0a7b90e2317e" />
+<img width="640" height="360" alt="image" src="https://github.com/user-attachments/assets/1de7085f-45f7-4869-bc3d-f98f9ccceb9f" />
+<img width="640" height="360" alt="image" src="https://github.com/user-attachments/assets/4899e25d-1dd1-4d3f-989b-c77a65f1373f" />
+<img width="640" height="360" alt="image" src="https://github.com/user-attachments/assets/0127c2fa-b5d9-4608-80ce-b9c8647c7c97" />
+<img width="640" height="360" alt="image" src="https://github.com/user-attachments/assets/ba1e8d16-ac92-412f-bb1b-1a78675159df" />
+<img width="640" height="360" alt="image" src="https://github.com/user-attachments/assets/b65e3c31-1aa2-4cf8-94cf-147138aeadb5" />
+<img width="640" height="360" alt="image" src="https://github.com/user-attachments/assets/394852da-6596-45d2-9564-94450fcb5298" />
+<img width="640" height="360" alt="image" src="https://github.com/user-attachments/assets/55835f1b-2bba-4361-9aac-313629e0e329" />
+<img width="640" height="360" alt="image" src="https://github.com/user-attachments/assets/e412b51b-314f-4a4a-9073-0c228cabe583" />
+<img width="640" height="360" alt="image" src="https://github.com/user-attachments/assets/4abe6d99-9a4a-44f4-a8e7-4fe606236d1c" />
+<img width="640" height="360" alt="image" src="https://github.com/user-attachments/assets/343c0449-2660-4875-b088-fd726b30beee" />
+<img width="640" height="360" alt="image" src="https://github.com/user-attachments/assets/d0e4b4f5-1615-4c81-ab7c-e7fd246e0ff2" />
+<img width="640" height="360" alt="image" src="https://github.com/user-attachments/assets/c0821de0-28f4-4eb6-9db1-2516c0883415" />
+<img width="640" height="360" alt="image" src="https://github.com/user-attachments/assets/6b413537-888d-4278-8779-b4ea6a97abf5" />
+<img width="640" height="360" alt="image" src="https://github.com/user-attachments/assets/5b1915f4-39cc-4b44-b463-b4693bb1cef0" />
+<img width="640" height="360" alt="image" src="https://github.com/user-attachments/assets/2c25064c-8870-4254-b90b-471330764fc2" />
+<img width="640" height="360" alt="image" src="https://github.com/user-attachments/assets/433a083e-fa57-48be-baca-b8297b824803" />
+<img width="640" height="360" alt="image" src="https://github.com/user-attachments/assets/7ad68a13-1015-4d49-9799-b1c8c75a9ddb" />
+<img width="640" height="360" alt="image" src="https://github.com/user-attachments/assets/4553a33a-3dd5-4acf-9564-9425f187337a" />
+<img width="640" height="360" alt="image" src="https://github.com/user-attachments/assets/e973a129-318a-44d6-8df0-582e999f0d0a" />
+<img width="640" height="360" alt="image" src="https://github.com/user-attachments/assets/82bff791-4961-4b92-88da-f72dbf455069" />
+<img width="640" height="360" alt="image" src="https://github.com/user-attachments/assets/2286d71d-d06e-4632-ad14-cfc184a79df0" />
+<img width="640" height="360" alt="image" src="https://github.com/user-attachments/assets/877e66dc-8d62-4615-b0cb-a119d46bc9c4" />
+<img width="640" height="360" alt="image" src="https://github.com/user-attachments/assets/85003f70-22d8-4b9e-9c10-b348dc704197" />
+<img width="640" height="360" alt="image" src="https://github.com/user-attachments/assets/98d7c294-c670-48e2-9d30-07c7b5343478" />
+<img width="640" height="360" alt="image" src="https://github.com/user-attachments/assets/ffc11f60-dbf3-436f-b781-7bcaff80e176" />
+<img width="640" height="360" alt="image" src="https://github.com/user-attachments/assets/d32078d7-c985-4f13-9b31-e38453594dba" />
+<img width="640" height="360" alt="image" src="https://github.com/user-attachments/assets/3bd22411-413d-455c-b96b-1abda5b9fba3" />
+<img width="640" height="360" alt="image" src="https://github.com/user-attachments/assets/84b505e9-6a7f-4ae3-bf95-4dcb7c46e437" />
+<img width="640" height="360" alt="image" src="https://github.com/user-attachments/assets/4e6daf83-da3c-4b24-9fc2-e980f68b3b1c" />
+
 Additional development since then is reflected below and in the software.
 
 <br>
