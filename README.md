@@ -28,6 +28,8 @@ and an optional **OLED** display.
 ## Hands on Technology presentation of 2/2/2022
 
 Available ![here](https://github.com/Bobbo117/Cellular-IoT-Monitor/blob/main/doc/Cellular%20IoT%20Homewatch.pdf)
+<br>
+Summary:
 
 <img width="640" height="360" alt="image" src="https://github.com/user-attachments/assets/20706cdb-4d9c-4480-8253-2d5d93e25787" />
 <img width="640" height="360" alt="image" src="https://github.com/user-attachments/assets/fdac9afa-5380-434b-a6b1-5a3061b3ade8" />
