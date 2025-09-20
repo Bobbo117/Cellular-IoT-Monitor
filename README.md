@@ -181,8 +181,26 @@ immediate alerts when sensors cross adaptive thresholds.
 
 ## Further Discussion
 
+After trying several configurations, here is what I'd recommend:
+
+- LillyGo over Botletics since it has the ESP32 on the board with the cellular modem. 
+
+- The ESPNOW protocol over client/server because of the lighter footprint and easier implementation.
+  
+- Use the adaFruit path to access IFTTT for more reliable performance.
+
+- Standardize on the ESP32 vs 8266 for more robust capabilities and to simplify your life moving forward.
+
+- Dweet has bitten the dust.  Get on the google to find an alternative.
+
+- Use a timer to disconnect the power from the LillyGo or Botletics daily.
+
+All of the above alternatives can be configured in the software.
+
 <br>
-## Observations   
+## Observations
+
+- Kudos to Hologram.  They have a polished dashboard which makes life easy to monitor. 
 
 <br>
 ## Conclusions
