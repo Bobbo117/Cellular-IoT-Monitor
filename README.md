@@ -178,11 +178,19 @@ immediate alerts when sensors cross adaptive thresholds.
     
 -   [DC 5V 1 Channel Relay Module Board Shield High/Low Level Trigger with Optocoupler](
     https://www.amazon.com/gp/product/B079FJSYGY/ref=ox_sc_act_title_11?smid=A11A70Q280RHPK&th=1)
-    
-    
+
+## Further Discussion
 
 <br>
+## Observations   
 
+<br>
+## Conclusions
+
+## Attributions and References
+
+<img width="640" height="360" alt="image" src="https://github.com/user-attachments/assets/84b505e9-6a7f-4ae3-bf95-4dcb7c46e437" />
+<img width="640" height="360" alt="image" src="https://github.com/user-attachments/assets/14143453-9382-4462-9818-6dc186219bd9" />
 
 <!----------------------------------------------------------------------------->
 
