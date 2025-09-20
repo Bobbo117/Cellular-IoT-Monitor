@@ -198,13 +198,28 @@ After trying several configurations, here is what I'd recommend:
 All of the above alternatives can be configured in the software.
 
 <br>
+<br>
 ## Observations
 
-- Kudos to Hologram.  They have a polished dashboard which makes life easy to monitor. 
+- Kudos to Hologram.  They have a polished dashboard which makes life easy to monitor.
 
+- The software is very adaptable to other applications.  See my GarageController, for example.
 <br>
+<br>
+## Results
+
+As of now (September 20, 2025) the system has:
+
+- Detected a failed AC system by noting rising temperature and humidity.
+
+- Helped identify a wall betwwen our condo and an attached storage shed that is uninsulated.
+ 
 ## Conclusions
 
+- This system has worked fine and has paid for itself.  Highly recommended.
+
+<br>
+<br>
 ## Attributions and References
 
 <img width="640" height="360" alt="image" src="https://github.com/user-attachments/assets/84b505e9-6a7f-4ae3-bf95-4dcb7c46e437" />
