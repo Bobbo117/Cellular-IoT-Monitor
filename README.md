@@ -213,10 +213,14 @@ As of now (September 20, 2025) the system has:
 - Detected a failed AC system by noting rising temperature and humidity.
 
 - Helped identify a wall betwwen our condo and an attached storage shed that is uninsulated.
+
+- Provided peace of mind as we can veerify temperature, humidity, doors, lights, basement dryness, etc.
  
 ## Conclusions
 
-- This system has worked fine and has paid for itself.  Highly recommended.
+- This system has worked fine and has paid for itself.
+
+- We have eliminated the need for WiFi or homewatch services while absent.
 
 <br>
 <br>
