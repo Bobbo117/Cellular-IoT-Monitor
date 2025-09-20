@@ -54,6 +54,7 @@ Summary:
 <img width="640" height="360" alt="image" src="https://github.com/user-attachments/assets/ba1e8d16-ac92-412f-bb1b-1a78675159df" />
 <img width="640" height="360" alt="image" src="https://github.com/user-attachments/assets/b65e3c31-1aa2-4cf8-94cf-147138aeadb5" />
 <img width="640" height="360" alt="image" src="https://github.com/user-attachments/assets/394852da-6596-45d2-9564-94450fcb5298" />
+<img width="640" height="360" alt="image" src="https://github.com/user-attachments/assets/2b09ce9b-87c0-4e11-b7d8-7654a172d75a" />
 <img width="640" height="360" alt="image" src="https://github.com/user-attachments/assets/55835f1b-2bba-4361-9aac-313629e0e329" />
 <img width="640" height="360" alt="image" src="https://github.com/user-attachments/assets/e412b51b-314f-4a4a-9073-0c228cabe583" />
 <img width="640" height="360" alt="image" src="https://github.com/user-attachments/assets/4abe6d99-9a4a-44f4-a8e7-4fe606236d1c" />
@@ -76,9 +77,11 @@ Summary:
 <img width="640" height="360" alt="image" src="https://github.com/user-attachments/assets/d32078d7-c985-4f13-9b31-e38453594dba" />
 <img width="640" height="360" alt="image" src="https://github.com/user-attachments/assets/3bd22411-413d-455c-b96b-1abda5b9fba3" />
 <img width="640" height="360" alt="image" src="https://github.com/user-attachments/assets/84b505e9-6a7f-4ae3-bf95-4dcb7c46e437" />
-<img width="640" height="360" alt="image" src="https://github.com/user-attachments/assets/4e6daf83-da3c-4b24-9fc2-e980f68b3b1c" />
+<img width="640" height="360" alt="image" src="https://github.com/user-attachments/assets/14143453-9382-4462-9818-6dc186219bd9" />
 
-Additional development since then is reflected below and in the software.
+<br>
+
+Additional developments since the above description are reflected below and in the software.
 
 <br>
 <br>
