@@ -1,6 +1,6 @@
 # Cellular IoT Monitor  
 
-*Transmit sensor data from remote locations without internet.*
+*Transmit sensor data from remote locations (i.e., vacant home) without internet.*
 *Transfer data to email, text, Google Sheets, IFTTT, Home Assistant, and more for less than $2 per month.*
 
 <br>
