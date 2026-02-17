@@ -1,15 +1,39 @@
 
 const char* APP = "AmbientAP ";
-const char* VERSION = "2025 v0704 ";
-
+const char* VERSION = "V2025_0725 ";
+/* 2025 Changes:
+ * 3/7/2025 sendFailureCount is used to prevent repeat transmission to Home Assistant
+ * haPublishFlag decouples HA reports from ESP reports using reportFlag
+ * cease measuring temp hum press for IDs that dont have sensors
+ * 
+ * 6/7 Move OLED_ process yo only IDs that have display
+ * readXX reorts even if no change
+ * loopCount
+ *  haPublishFlag = false; is moved from end to top of publishMQTT
+ *  printSensorDataFlag implemented
+ *  misc Serial print formatting
+ *  todo OTA; MQTT strings; OLED_
+ *  6/12  redesign setuo() and loop() for easier readability +
+ *  6/15 loop() redo to handle 4 modes. int only, 1 n done, hang, no sloeep
+ *  cleanup comments on Serial monitor #ifdef DEBUG_
+ *  6/18 cleanup mqtt
+ *  619_a add casa 1_a from HUB
+ *  6/20 github
+ *  6/21 change setupESPNOW_1to1() to process channel 0 = no wifi found
+ *  mqtt works
+ *  7/10 OTA
+ * 7/23 add ThingSpeak
+ * 7/25 add DS18B20 temperaure probe
+ */
 /////////////////////////////////////////////////////////////////////////////////////
 //
 // AmbientAP is a flexible, multi-featured sensor platform.  It can:
 //  1. expose sensor values via http GET command requests from a client.
 //  2. expose sensor values via lighter footprint ESPNOW protocol which pushes data to a peer/client periodically without receiving a request.
 //  3. expose sensor values via MQTT to Home Assistant or other MQTT broker.
-//  3. operate using either an ESP32 or ESP8266 (including d1 mini) controller.
-//  4. accommodate the following sensors (simultaneusly if an ESP32 is used):
+//  4. 
+//  5. operate using either an ESP32 or ESP8266 (including d1 mini) controller.
+//  6. accommodate the following sensors (simultaneusly if an ESP32 is used):
 //      temperature
 //      humidity          
 //      atmospheric pressure          
@@ -18,10 +42,10 @@ const char* VERSION = "2025 v0704 ";
 //      door/window state
 //      pir motion sensors 
 //      ultrasonic sensors measure distance (car parking aid or car presence detector in garage for example) 
-//  6. sleep and wake up via a timer, an interrupt (such as a window being opened) or motion, or it can stay awake for continuous monitoring.
-//  7. sleep immediately after sending a successfully received ESPNOW message.
-//  8. operate with or without an OLED display.
-//  9. operate as one of many such devices using this software by assigning unique SensorID (1, 2, 3, etc.) to each sensor platform.
+//  7. sleep and wake up via a timer, an interrupt (such as a window being opened) or motion, or it can stay awake for continuous monitoring.
+//  8. sleep immediately after sending a successfuL ESPNOW message.
+//  9. operate with or without an OLED display.
+//  10.operate as one of many such devices using this software by assigning unique SensorID (1, 2, 3, etc.) to each sensor platform.
 //
 /*////////////////////////////////////////////////////////////////////////////////////
 
@@ -67,44 +91,47 @@ NOTES -  1. IF using MELife for ESP32 ESP-32S Development Board, use Arduino IDE
   //  HUB MAC Address (if you want to transmit to a cellular hub using ESPNOW):
   //  uint8_t SECRET_broadcastAddress[] = {0x8C, 0xAA, 0xB3, 0x85, 0x6A, 0x67};  //example for Mac Address 8C:AA:B3:85:6A:67
 
- 
+  // Thingspeak API key (optional):
+  //  #define SECRET_THINGSPEAK_API_KEY_Device1 = "xxxxx"
+  //  #define SECRET_AQI_THINGSPEAK_API_KEY_Device1 "xxxxx"
 //////////////////////////////////////////////////////////////  
 //*******         Compile-time Options           ***********//
 //        (Disable unwanted options with leading //)
-////////////////////////////////////////////////////////////////#define OTA_             // Enable over the air software updates
-
-//#define HA_              // Enable direct ommunication with Home Assistant for enhanced real time sensor updates and monitoring via local wifi.
+//////////////////////////////////////////////////////////////
+//#define OTA_             // Enable over the air software updates (Future enhancement)
 
 //#define GATEWAY_         //optional internet gateway (router) in use by destination device (Hub).
                            //software will determine the wifi channel being used to communicate with the hub
                            ///NOTE - Enable gateway if using ESPNOW and hub is reporting to Home Assistant!!
 
-  #define DEBUG_           //omment out if no printout to Serial monitor 
+  #define DEBUG_           //comment out if no printout to Serial monitor 
   
-  //Select one:
+  //Select one of the following 4:
   //*****************
-  //#define HTTPGET_       //set up as wifi server w/o router to transfer data upon receiving a http GET message
-  #define ESPNOW_1TO1_     //send data to one peer: enter MAC address of receiver in secrets.h file  
-                           //ESPNOW_1to1 is preferred; NOTE: HTTPGET is a memory hog.
+//#define HTTPGET_         // set up as wifi server w/o router to transfer data upon receiving a http GET message
+ #define ESPNOW_1TO1_     // send data to one peer: enter MAC address of receiver in secrets.h file  
+                           // ESPNOW_1to1 is preferred; NOTE: HTTPGET is a memory hog.
+//#define HA_              // Enable direct ommunication with Home Assistant for enhanced real time sensor updates and monitoring via local wifi.
+//#define THINGSPEAK_      // enable ThingSpeak
 
 //////////////////////////////////////////////////////////////
                          
   //*****************************
   // 1. Select one CASA (reporting site which may have unique configuration):
   // IMPORTANT: CHANGE SECRETS.H FILE WHEN CHANGING CASA !!!
-  //*****************************
+  //***************************** 
   //#define CASA_1            // Site #1 LillyGo (FL)
   //#define CASA_1a           // Site# 1 Botletics
-  //  #define CASA_2            // Site #2 LillyGo
-  #define CASA_2a           // Site# 2 Botletics
+    #define CASA_2            // Site #2 LillyGo (ME)
+  //#define CASA_2a           // Site# 2 Botletics
 
   //*****************
   // 2. Select unique sensorID
   //*****************
-  #define ID1     //FL gar door  ME basement
+//  #define ID1     //FL gar door  ME basement
 //  #define ID2     //FL car sonic ME 2 bedroom 2a gur=est bath wh-BL
 //  #define ID3     //FL car hatch ME kitchen
-//  #define ID4     //FL Kitchen ME bathroom
+  #define ID4     //FL Kitchen ME bathroom
 //  #define ID5     //FL bath ME #13 bath
 //  #define ID6     //FL bath2 / lanai
 
@@ -136,6 +163,7 @@ NOTES -  1. IF using MELife for ESP32 ESP-32S Development Board, use Arduino IDE
   //#define AHT10_        // Adafruit AHT10 
   //#define BME_          // BME280 FL
   //#define DHT_          // DHT11,21,22, etc.
+  //#define DS18B20_      // 
   //#define SHT20_        // DFRobot SHT20
 
   //////////////////////////////////////////////////////////////
@@ -154,6 +182,7 @@ NOTES -  1. IF using MELife for ESP32 ESP-32S Development Board, use Arduino IDE
       const long awakeSeconds = 2*60;      //2*60 default interval in seconds to stay awake as server; ignored if sleepSeconds = 0 
       const long chillSeconds = 10;        //interval between readings if sleepSeconds = 0 slows serial monitor updates
     #endif
+    const long sensorSeconds = 10*60;        // interval in seconds to refresh sensor readings 
 
     //*****************
     #ifdef ID1  
@@ -369,8 +398,8 @@ NOTES -  1. IF using MELife for ESP32 ESP-32S Development Board, use Arduino IDE
       uint8_t sensorID = 4;
       #define displayTitle "CASA_2 #4"
       const char* ssid = "AMBIENT_4";
-      #define AHT10_         // DHT11,21,22, etc.
-
+     // #define AHT10_         // DHT11,21,22, etc.
+      #define DS18B20_
       #define ESP32_           //Recommended choice is esp32
       //#define d1MiniESP32_     //select ESP32 and d1MiniESP32 if diMiniESP32 is used
       //#define ESP8266_       //use for wemos D1 Mini.  
@@ -440,7 +469,7 @@ NOTES -  1. IF using MELife for ESP32 ESP-32S Development Board, use Arduino IDE
   
   #ifdef CASA_2:
     //const char* location[] = {"hub","basement","bedroom","kitchen","bathroom","spare","spare","spare"};
-    uint8_t temps[] = {1,1,1,1, 1,1,1,0}, hums[]=  {1,1,1,1, 1,1,1,0}, dbms[]= {1,0,0,0, 0,0,0,0}, press[]={0,0,0,0, 0,0,0,0}, bat[]=   {0,0,0,0, 0,0,0,0};
+    uint8_t temps[] = {1,1,1,1, 1,1,1,0}, hums[]=  {1,1,1,1, 0,1,1,0}, dbms[]= {1,0,0,0, 0,0,0,0}, press[]={0,0,0,0, 0,0,0,0}, bat[]=   {0,0,0,0, 0,0,0,0};
     uint8_t luxs[] =  {0,1,0,1, 0,0,0,0}, h2os[] = {0,1,0,0, 0,0,0,0}, doors[]={0,0,1,1, 0,0,0,0}, pirs[]={0,1,0,1, 0,0,0,0}, sonics[]={0,0,0,0, 0,0,0,0};
   #endif
 
@@ -460,7 +489,7 @@ NOTES -  1. IF using MELife for ESP32 ESP-32S Development Board, use Arduino IDE
   //*****************
   // 8. ESP32 PIN DEFINITIONS
   //    note: esp32 set pin 15 low prevents startup log on Serial monitor - 
-  //          good to know for battery operation
+  //      good to know for battery operation
   //    From 363-ESP32 Pri 1 pins - The guy with the swiss accent:
   //      Pri1: GPIO 4*,5,16,17,18,19,23,32,33; (16,17 not available on Wrover)
   //      Pri2: (input only, no internal pullup) GPIO 34,35,36,39.
@@ -530,11 +559,23 @@ NOTES -  1. IF using MELife for ESP32 ESP-32S Development Board, use Arduino IDE
     #include <Adafruit_BME280.h>    // library for BME280 temp hum pressure sensor
     Adafruit_BME280 bme;            // I2C
   #endif
+  #ifdef DS18B20_
+    #include <OneWire.h>
+    #include <DallasTemperature.h>
+    
+    // GPIO where the DS18B20 is connected to
+    const int oneWireBus = 4;     
+    
+    // Setup a oneWire instance to communicate with any OneWire devices
+    OneWire oneWire(oneWireBus);
+    
+    // Pass our oneWire reference to Dallas Temperature sensor 
+    DallasTemperature sensors(&oneWire);
+  #endif
   #ifdef SHT20_  
     #include "DFRobot_SHT20.h"
     DFRobot_SHT20 sht20(&Wire, SHT20_I2C_ADDR);
   #endif    
-
 
 ////////////////////////////////////////////////////////////////////////////
 //*********            End of Compile-time Options           ***************
@@ -650,6 +691,18 @@ NOTES -  1. IF using MELife for ESP32 ESP-32S Development Board, use Arduino IDE
     //***************mqtt stuff
     #include <AsyncMqttClient.h>
     AsyncMqttClient mqttClient;  // Create a MQTT client Object
+  #endif
+
+  //*******************************   
+  // 16. ThingSpeak 
+  //*******************************
+  #ifdef THINGSPEAK_
+    #include <ThingSpeak.h> // always include thingspeak header file after other header files and custom macros
+    #ifndef WIFI_H
+      #define WIFI_H
+      #include <WiFi.h>        
+    #endif        
+    WiFiClient client;
   #endif
   
   /************************************
@@ -839,8 +892,8 @@ static int espNowTimeIsUp(long msec){
     //callback verifies successful receipt after message was sent (see loop below for sendEspNow_1to1 function)
     #ifdef DEBUG_
       Serial.println(F("*****ESPNOW_1to1_OnDataSent***** "));
-      Serial.print(F("     Last Packet Send Status: "));
-      Serial.println(status == ESP_NOW_SEND_SUCCESS ? "Delivery Success" : "Delivery Fail");
+      //Serial.print(F("     Last Packet Send Status: "));
+      Serial.println(status == ESP_NOW_SEND_SUCCESS ? "     Delivery Success" : "     Delivery Fail");
     #endif
     if(status==0)
     {
@@ -854,7 +907,7 @@ static int espNowTimeIsUp(long msec){
 
       espNowStatus=2; // 0=not started; 1 = in process; 2=completed
       if(awakeSeconds==0){
-        napTime();
+ //       napTime();
       } 
     
     } else {
@@ -867,7 +920,7 @@ static int espNowTimeIsUp(long msec){
         espNowStatus=2;  // 0=not started; 1 = in process; 2=completed
       
         if(awakeSeconds==0){
-          napTime();
+//          napTime();
         }             
       }else{
         sendEspNow_1to1();
@@ -969,14 +1022,37 @@ int32_t getWiFiChannel(const char *ssid) {
 
 //*******************************
 void napTime(){
+  #ifdef DEBUG_             // issue sleep message if #define DEBUG_ is enabled
+    long wait = 5000L;
+    long wait2 = 1000L;
+    while (!printDelay(wait)){       // allow time for prior msgs to screen
+    }
+    Serial.println(F("_________________________________"));    
+  #endif  
   setupWakeupConditions();  //set up interrupt timer or if door or PIR state changes
   #ifdef DEBUG_             // issue sleep message if #define DEBUG_ is enabled
-    delay(2000);            // allow time for prior msgs to screen
-    Serial.println(F(" "));Serial.print(F("sleeping "));Serial.print(sleepSeconds);Serial.println(F(" seconds..zzzz"));
-    delay(2000);
+    Serial.println("*****napTime*****");
+    //Serial.println(F(" "));
+    Serial.print(F("     sleeping "));Serial.print(sleepSeconds);Serial.println(F(" seconds..zzzz"));
+    Serial.println(F("_________________________________"));
+    while (!printDelay(wait)){       // allow time for prior msgs to screen
+    }
   #endif
   ESP.deepSleep(sleepSeconds * uS_TO_S_FACTOR);  //go to sleep for sleepSeconds 
 }
+
+//***********************************
+static int printDelay(long msec){    
+  //Counter to determine if processor should go to sleep
+  static unsigned long previousMillis = millis();   
+  unsigned long currentMillis = millis();
+  if (currentMillis - previousMillis >= msec) {
+    previousMillis = currentMillis; 
+    return(1);
+  }else{
+    return(0);
+  }
+} 
       
 //************************************
 void printSensorData(){
@@ -1005,7 +1081,7 @@ void printSensorData(){
 //********************************
 void printWakeupID(uint8_t wakeupID){
   #ifdef DEBUG_ 
-    Serial.print(F("*****printWakeupID***** ---> ")); 
+    Serial.print(F("*****printWakeupID***** ")); 
     switch(wakeupID){
       case 0 : Serial.println(F("RTC_IO = door")); break;
       case 1 : Serial.println(F("RTC_CNTL = PIR")); break;
@@ -1015,6 +1091,121 @@ void printWakeupID(uint8_t wakeupID){
       default : Serial.println(F("default = restart")); break;
     }
   #endif    
+}
+
+//*********************************
+void publishThingSpeak()  
+{
+  //****Publish to Thingspeak
+  #ifdef THINGSPEAK_
+    Serial.println();
+    Serial.println(F("*****publishThingSpeak()***** "));
+
+/*        
+    Parameters:
+    channelNumber - Channel number
+    field - Field number (1-8) within the channel to write to.
+    value - data
+    writeAPIKey - Write API key associated with the channel.
+    
+    Returns:
+    HTTP status code of 200 if successful.
+*/
+    #ifdef CASA_1
+      #define API_KEY SECRET_AQI_THINGSPEAK_API_KEY_Ambient_FL 
+      #define CHANNEL SECRET_AQI_THINGSPEAK_CHANNEL_Ambient_FL  
+    #endif
+    #ifdef CASA_2
+      #define API_KEY SECRET_AQI_THINGSPEAK_API_KEY_Ambient_ME
+      #define CHANNEL SECRET_AQI_THINGSPEAK_CHANNEL_Ambient_ME
+    #endif  
+
+    int x = 0;
+    // Write temperature to field 1.
+    if(temps[sensorID]==1){
+      x = ThingSpeak.writeField(CHANNEL, 1, sensorData.temperature, API_KEY);
+      #ifdef DEBUG_
+        if(x == 200){
+          Serial.println(F("     Field 1 update successful."));
+        }
+        else{
+         Serial.print(F("     HTTP error code ")); Serial.println(x);
+        }
+      #endif    
+      delay(20000);   //Wait 20 seconds between data writes to ThingSpeak!!
+    }
+    
+    // Write humidity to field 2.
+    if(hums[sensorID]==1){
+      x = ThingSpeak.writeField(CHANNEL, 2, sensorData.humidity, API_KEY);
+      #ifdef DEBUG_
+        if(x == 200){
+          Serial.println(F("     Field 2 update successful."));
+        }
+        else{
+          Serial.print(F("     HTTP error code ")); Serial.println(x);
+        }  
+      #endif     
+      delay(20000);   //Wait 20 seconds between data writes to ThingSpeak!!
+    }
+    
+    // Write LUX to field 3.
+    if(luxs[sensorID]==1){
+      x = ThingSpeak.writeField(CHANNEL, 3, sensorData.lux, API_KEY);
+      #ifdef DEBUG_
+        if(x == 200){
+          Serial.println(F("     Field 3 update successful."));
+        }
+        else{
+         Serial.print(F("     HTTP error code ")); Serial.println(x);
+        }  
+      #endif    
+      delay(20000);   //Wait 20 seconds between data writes to ThingSpeak!!
+    }
+    
+    // Write door to field 4.
+    if(doors[sensorID]==1){
+      x = ThingSpeak.writeField(CHANNEL, 4, sensorData.doorCount, API_KEY);
+      #ifdef DEBUG_
+        if(x == 200){
+          Serial.println(F("     Field 4 update successful."));
+        }
+        else{
+         Serial.print(F("     HTTP error code ")); Serial.println(x);
+        }  
+      #endif    
+      delay(20000);   //Wait 20 seconds between data writes to ThingSpeak!!
+    }
+    
+    // Write pir to field 5.
+    if(pirs[sensorID]==1){
+      x = ThingSpeak.writeField(CHANNEL, 5, sensorData.pirCount, API_KEY);
+      #ifdef DEBUG_
+        if(x == 200){
+          Serial.println(F("     Field 5 update successful."));
+        }
+        else{
+         Serial.print(F("     HTTP error code ")); Serial.println(x);
+        }  
+      #endif          
+      delay(20000);   //Wait 20 seconds between data writes to ThingSpeak!!
+    }
+
+    // Write h2o to field 6.
+    if(h2os[sensorID]==1){
+      x = ThingSpeak.writeField(CHANNEL, 6, sensorData.aH2o, API_KEY);
+      #ifdef DEBUG_
+        if(x == 200){
+          Serial.println(F("     Field 6 update successful."));
+        }
+        else{
+         Serial.print(F("     HTTP error code ")); Serial.println(x);
+        }  
+      #endif          
+      //delay(20000);   //Wait 20 seconds between data writes to ThingSpeak!!
+    }
+
+  #endif
 }
 
 //***********************************
@@ -1065,9 +1256,9 @@ void readDoor(){
 
     #ifdef DEBUG_
       Serial.print(F("*****readDoor*****"));
-      Serial.print(F("     pinDoor : "));Serial.print(digitalRead(pinDoor));
+      Serial.print(F("\tpinDoor : "));Serial.print(digitalRead(pinDoor));
       //Serial.print(F("     priorDoor : "));Serial.print(sensorData.door);
-      Serial.print(F("     doorCount: "));Serial.println(sensorData.doorCount);
+      Serial.print(F("\tdoorCount: "));Serial.println(sensorData.doorCount);
     #endif
     
     //door = 1 when closed, 0 when open due to pullup resister
@@ -1116,7 +1307,7 @@ void readHumidity() {
       printSensorDataFlag = true;
     }
     #ifdef DEBUG_
-      Serial.print(F("humidity, hum: "));Serial.print(sensorData.humidity);Serial.print(F(", "));Serial.println(hum);
+      Serial.print(F("\thumidity, hum: "));Serial.print(sensorData.humidity);Serial.print(F(", "));Serial.println(hum);
     #endif
   }  
 }
@@ -1126,7 +1317,7 @@ void readPhotoCell(){
   //Read analog value and convert to % as whole number 0-99
   if (luxs[sensorID]==1){
     #ifdef DEBUG_
-      Serial.print(F("*****readPhotoCell***** "));
+      Serial.print(F("*****readPhotoCell*****"));
     #endif  
     sensorData.lux = 2.44*((4095-analogRead(pinPhotoCell))/100);  //whole number 1-99 %
     reportFlag = true;
@@ -1134,7 +1325,7 @@ void readPhotoCell(){
     printSensorDataFlag = true;
   
     #ifdef DEBUG_
-      Serial.print(F("     lux%, A/D: "));Serial.print(sensorData.lux); Serial.println(F("% "));
+      Serial.print(F("\tlux%, A/D: "));Serial.print(sensorData.lux); Serial.println(F("% "));
     #endif  
   }  
 }
@@ -1194,7 +1385,7 @@ void readPressure(){
   //valid data updates sensorData.pressure and pres; invalid updates only pres with  "--"
   if (press[sensorID]==1){
     #ifdef DEBUG_
-      Serial.print(F("*****readPressure***** "));
+      Serial.print(F("*****readPressure*****"));
     #endif 
     float x = 0; 
     pres="--"; //indicate no reading
@@ -1210,7 +1401,7 @@ void readPressure(){
       }
     #endif                                                                    
     #ifdef DEBUG_
-      Serial.print(F("pressure, pres: "));Serial.print(sensorData.pressure);Serial.print(F(", "));Serial.println(pres);
+      Serial.print(F("\tpressure, pres: "));Serial.print(sensorData.pressure);Serial.print(F(", "));Serial.println(pres);
     #endif  
   }  
 }
@@ -1237,7 +1428,7 @@ void readTemperature() {
   //valid data updates sensorData.temperature and temp; invalid updates only temp with  "--"
   if (temps[sensorID]==1){  
     #ifdef DEBUG_
-      Serial.print(F("*****readTemperature***** "));
+      Serial.print(F("*****readTemperature***"));
     #endif 
     float x = 0; 
     #ifdef AHT10_
@@ -1252,6 +1443,11 @@ void readTemperature() {
     #endif
     #ifdef BME_
       x=bme.readTemperature();      // C
+    #endif  
+    #ifdef DS18B20_
+      sensors.requestTemperatures(); 
+      x = sensors.getTempCByIndex(0);
+      //x = sensors.getTempFByIndex(0);
     #endif 
     #ifdef SHT20_
       x = sht20.readTemperature();  // C
@@ -1269,7 +1465,7 @@ void readTemperature() {
     }
   
     #ifdef DEBUG_ 
-      Serial.print(F("temperature, tem: "));Serial.print(sensorData.temperature);Serial.print(F(", "));Serial.println(tem);
+      Serial.print(F("\ttemperature, tem: "));Serial.print(sensorData.temperature);Serial.print(F(", "));Serial.println(tem);
     #endif  
   }    
 }
@@ -1331,6 +1527,7 @@ uint8_t readWakeupID(){
 //***********************************
 void sendEspNow_1to1(){
   //format data and send to single ESPNOW peer if #define espnow_1to1 is enabled
+  espNowStatus=2;   // 0=not started; 1 = in process; 2=completed
   #ifdef ESPNOW_1TO1_
     #ifdef DEBUG_
       Serial.println(F("*****sendEspNow1to1***** "));
@@ -1521,6 +1718,9 @@ void setupSensors(){
     dht.begin();
     delay(1000);
   #endif
+  #ifdef DS18B20_
+    sensors.begin();
+  #endif  
   #ifdef MCP9808_      
     if (!tempsensor.begin()) {
       #ifdef DEBUG_
@@ -1539,15 +1739,43 @@ void setupSensors(){
 }
 
 //*********************************
+void setupThingSpeak()
+{
+  #ifdef THINGSPEAK_
+    #ifdef DEBUG_
+      Serial.println();
+      Serial.println(F("*****setupThingSpeak()*****"));
+      Serial.print("     connecting.. ");
+      Serial.print(SECRET_WIFI_SSID);
+    #endif
+    WiFi.begin(SECRET_WIFI_SSID, SECRET_WIFI_PASSWORD);
+    while (WiFi.status() != WL_CONNECTED)
+    {
+      delay(500);
+      //Serial.print(".");
+    }
+    #ifdef DEBUG_
+      Serial.println("");
+      Serial.println("     WIFI connected");
+    #endif  
+    ThingSpeak.begin(client); 
+    #ifdef DEBUG_
+      Serial.println(F("     setupThingSpeak completed"));
+    #endif  
+  #endif
+}
+
+//*********************************
 void setupWakeupConditions(){
   //set wakeup conditions based on door & PIR sensor
   #ifdef DEBUG_
     Serial.println(F("*****setupWakeupConditions*****"));
     if(doors[sensorID]==1){          //if this sensor platform has a door sensor:    
       Serial.print(F("     door --> "));Serial.println(!digitalRead(pinDoor));
+      //Serial.print(F("     door --> "));Serial.println(digitalRead(pinDoor));
     }
     if(pirs[sensorID]==1){                  //if this sensor platform has a pir sensor:
-      Serial.println(F("    pir --> 1"));//Serial.println(sensorData.pir);
+      Serial.println(F("     pir ---> 1"));//Serial.println(sensorData.pir);
     }  
   #endif 
 
@@ -2001,14 +2229,17 @@ void setup()
     Serial.println();           // Create a blank line
     Serial.println(F("_____setup()_____ "));
   #endif
+  
   restartIfTime();              //restart ea bootCount>bootResetCount if timer wakeup else increment bootCount 
   setupOledDisplay();           //prepare the oled display if #define includeOled is enabled
   displayVersion();             //display version on OLED and blink onboard led 5 sec on bootCount=1
   turnOnBoardLED();             //illuminate the on-board LED
   //attachInterrupt(digitalPinToInterrupt(pinPir), pirInterrupt, RISING);  //in case you want to try it!
   //attachInterrupt(digitalPinToInterrupt(pinDoor), doorChangeInterrupt, CHANGE); //in case you want to try it!
+  
   setupSensors();               //initialize sensors 
   setupMQTT();                  //if HA_ is set; delay after setup
+  setupThingSpeak();            // Initialize ThingSpeak if #define THINGSPEAK_ is enabled  
   setupESPNOW_1to1();           //format data and send espnow msg to a single peer if #define ESPNOW_1TO1_ is enabled; 
                                 //successful data transfer will cause the system to sleep if sleepSeconds > 0
   setupWifiServer();            //initialize wifi server if #define HTTPGET is enabled
@@ -2032,6 +2263,7 @@ void loop()
     readSensors();            // read all the sensors for this device NOTE - PIR and doors arrive by interrupt!
     displayOLED();            // display latest valid sensor readings on oled display if #define OLED_ is enabled   
     printSensorData();        // print sensor data if #define DEBUG_ enabled
+    publishThingSpeak();  
     publishMQTT(sensorID);    // publish to HA if enabled AND haPublishFlag = true
     sendEspNow_1to1();        // format data and send espnow msg to a single peer if #define ESPNOW_1TO1_ is enabled; 
     while (espNowStatus<=1){  // Wait for sendEspNow process to complete  // 0=not started; 1 = in process; 2=completed
@@ -2041,6 +2273,10 @@ void loop()
     }
   }
   loopStatus = 2;
+
+  if(awakeSeconds==0){
+    napTime();
+  } 
 
   if (sleepSeconds >0 && awakeSeconds >0 && sensorNapTime(awakeSeconds*1000) ==1 ){
     napTime();                // Go to sleep if awake time has elapsed
